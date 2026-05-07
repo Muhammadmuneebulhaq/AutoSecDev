@@ -1,0 +1,81 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Notebooks
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# Data and outputs
+data/chroma/
+outputs/
+*.json
+*.sql
+*.xml
+*.jsonl
+
+# OS
+Thumbs.db
+.DS_Store
+*.log
+
+# Project-specific
+.streamlit/secrets.toml
+.cache/
+*.tmp
+*.zip
+CVEfixes_v1.0.0/
+.env
+__pycache__/
+*.pyc
+*.pyo
+diversevul_20230702.json
+_prd_text.txt
+22i-1321_22-1306_22i-1337_ProjectProposal.pdf
+Generative_AI_Project_Ideas.pdf
+Project Task-1.pdf
+.cve.gz

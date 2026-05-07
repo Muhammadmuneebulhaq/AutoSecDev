@@ -1,0 +1,22 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.8.2
+python-dotenv==1.0.1
+requests==2.32.3
+jinja2==3.1.4
+streamlit==1.37.1
+
+# SAST tooling (CLI wrappers)
+bandit==1.7.10
+semgrep==1.96.0
+
+# RAG
+chromadb==0.5.5
+sentence-transformers==3.0.1
+
+# LLM + optional baseline model loading
+transformers==4.44.2
+peft==0.12.0
+accelerate==0.33.0
+torch==2.4.0
+
