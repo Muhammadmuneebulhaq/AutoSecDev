@@ -1,0 +1,644 @@
+vulnerability_type,vulnerable_code,fixed_code
+SQL Injection,"    def add_filtered_relation(self, filtered_relation, alias):
+        self.check_alias(alias)
+        filtered_relation.alias = alias
+        relation_lookup_parts, relation_field_parts, _ = self.solve_lookup_type(
+            filtered_relation.relation_name
+        )
+        if relation_lookup_parts:
+            raise ValueError(
+                ""FilteredRelation's relation_name cannot contain lookups ""
+                ""(got %r)."" % filtered_relation.relation_name
+            )
+        for lookup in get_children_from_q(filtered_relation.condition):
+            lookup_parts, lookup_field_parts, _ = self.solve_lookup_type(lookup)
+            shift = 2 if not lookup_parts else 1
+            lookup_field_path = lookup_field_parts[:-shift]
+            for idx, lookup_field_part in enumerate(lookup_field_path):
+                if len(relation_field_parts) > idx:
+                    if relation_field_parts[idx] != lookup_field_part:
+                        raise ValueError(
+                            ""FilteredRelation's condition doesn't support ""
+                            ""relations outside the %r (got %r).""
+                            % (filtered_relation.relation_name, lookup)
+                        )
+            if len(lookup_field_parts) > len(relation_field_parts) + 1:
+                raise ValueError(
+                    ""FilteredRelation's condition doesn't support nested ""
+                    ""relations deeper than the relation_name (got %r for ""
+                    ""%r)."" % (lookup, filtered_relation.relation_name)
+                )
+        filtered_relation = filtered_relation.clone()
+        filtered_relation.condition = rename_prefix_from_q(
+            filtered_relation.relation_name,
+            alias,
+            filtered_relation.condition,
+        )
+        self._filtered_relations[filtered_relation.alias] = filtered_relation","    def add_filtered_relation(self, filtered_relation, alias):
+        if ""."" in alias:
+            raise ValueError(
+                ""FilteredRelation doesn't support aliases with periods ""
+                ""(got %r)."" % alias
+            )
+        self.check_alias(alias)
+        filtered_relation.alias = alias
+        relation_lookup_parts, relation_field_parts, _ = self.solve_lookup_type(
+            filtered_relation.relation_name
+        )
+        if relation_lookup_parts:
+            raise ValueError(
+                ""FilteredRelation's relation_name cannot contain lookups ""
+                ""(got %r)."" % filtered_relation.relation_name
+            )
+        for lookup in get_children_from_q(filtered_relation.condition):
+            lookup_parts, lookup_field_parts, _ = self.solve_lookup_type(lookup)
+            shift = 2 if not lookup_parts else 1
+            lookup_field_path = lookup_field_parts[:-shift]
+            for idx, lookup_field_part in enumerate(lookup_field_path):
+                if len(relation_field_parts) > idx:
+                    if relation_field_parts[idx] != lookup_field_part:
+                        raise ValueError(
+                            ""FilteredRelation's condition doesn't support ""
+                            ""relations outside the %r (got %r).""
+                            % (filtered_relation.relation_name, lookup)
+                        )
+            if len(lookup_field_parts) > len(relation_field_parts) + 1:
+                raise ValueError(
+                    ""FilteredRelation's condition doesn't support nested ""
+                    ""relations deeper than the relation_name (got %r for ""
+                    ""%r)."" % (lookup, filtered_relation.relation_name)
+                )
+        filtered_relation = filtered_relation.clone()
+        filtered_relation.condition = rename_prefix_from_q(
+            filtered_relation.relation_name,
+            alias,
+            filtered_relation.condition,
+        )
+        self._filtered_relations[filtered_relation.alias] = filtered_relation"
+SQL Injection,"    def check_raster(self, lookup, template_params):
+        spheroid = lookup.rhs_params and lookup.rhs_params[-1] == ""spheroid""
+
+        # Check which input is a raster.
+        lhs_is_raster = lookup.lhs.field.geom_type == ""RASTER""
+        rhs_is_raster = isinstance(lookup.rhs, GDALRaster)
+
+        # Look for band indices and inject them if provided.
+        if lookup.band_lhs is not None and lhs_is_raster:
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""lhs""] = ""%s, %s"" % (
+                template_params[""lhs""],
+                lookup.band_lhs,
+            )
+
+        if lookup.band_rhs is not None and rhs_is_raster:
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""rhs""] = ""%s, %s"" % (
+                template_params[""rhs""],
+                lookup.band_rhs,
+            )
+
+        # Convert rasters to polygons if necessary.
+        if not self.raster or spheroid:
+            # Operators without raster support.
+            if lhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            if rhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+        elif self.raster == BILATERAL:
+            # Operators with raster support but don't support mixed (rast-geom)
+            # lookups.
+            if lhs_is_raster and not rhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            elif rhs_is_raster and not lhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+
+        return template_params","    def check_raster(self, lookup, template_params):
+        spheroid = lookup.rhs_params and lookup.rhs_params[-1] == ""spheroid""
+
+        # Check which input is a raster.
+        lhs_is_raster = lookup.lhs.field.geom_type == ""RASTER""
+        rhs_is_raster = isinstance(lookup.rhs, GDALRaster)
+
+        # Look for band indices and inject them if provided.
+        if lookup.band_lhs is not None and lhs_is_raster:
+            if not isinstance(lookup.band_lhs, int):
+                name = lookup.band_lhs.__class__.__name__
+                raise TypeError(f""Band index must be an integer, but got {name!r}."")
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""lhs""] = ""%s, %s"" % (
+                template_params[""lhs""],
+                lookup.band_lhs,
+            )
+
+        if lookup.band_rhs is not None and rhs_is_raster:
+            if not isinstance(lookup.band_rhs, int):
+                name = lookup.band_rhs.__class__.__name__
+                raise TypeError(f""Band index must be an integer, but got {name!r}."")
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""rhs""] = ""%s, %s"" % (
+                template_params[""rhs""],
+                lookup.band_rhs,
+            )
+
+        # Convert rasters to polygons if necessary.
+        if not self.raster or spheroid:
+            # Operators without raster support.
+            if lhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            if rhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+        elif self.raster == BILATERAL:
+            # Operators with raster support but don't support mixed (rast-geom)
+            # lookups.
+            if lhs_is_raster and not rhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            elif rhs_is_raster and not lhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+
+        return template_params"
+SQL Injection,"def _write_postgis(
+    gdf,
+    name,
+    con,
+    schema=None,
+    if_exists=""fail"",
+    index=False,
+    index_label=None,
+    chunksize=None,
+    dtype=None,
+):
+    """"""
+    Upload GeoDataFrame into PostGIS database.
+
+    This method requires SQLAlchemy and GeoAlchemy2, and a PostgreSQL
+    Python driver (e.g. psycopg2) to be installed.
+
+    Parameters
+    ----------
+    name : str
+        Name of the target table.
+    con : sqlalchemy.engine.Connection or sqlalchemy.engine.Engine
+        Active connection to the PostGIS database.
+    if_exists : {'fail', 'replace', 'append'}, default 'fail'
+        How to behave if the table already exists:
+
+        - fail: Raise a ValueError.
+        - replace: Drop the table before inserting new values.
+        - append: Insert new values to the existing table.
+    schema : string, optional
+        Specify the schema. If None, use default schema: 'public'.
+    index : bool, default True
+        Write DataFrame index as a column.
+        Uses *index_label* as the column name in the table.
+    index_label : string or sequence, default None
+        Column label for index column(s).
+        If None is given (default) and index is True,
+        then the index names are used.
+    chunksize : int, optional
+        Rows will be written in batches of this size at a time.
+        By default, all rows will be written at once.
+    dtype : dict of column name to SQL type, default None
+        Specifying the datatype for columns.
+        The keys should be the column names and the values
+        should be the SQLAlchemy types.
+
+    Examples
+    --------
+    >>> from sqlalchemy import create_engine  # doctest: +SKIP
+    >>> engine = create_engine(""postgresql://myusername:mypassword@myhost:5432\
+/mydatabase"";)  # doctest: +SKIP
+    >>> gdf.to_postgis(""my_table"", engine)  # doctest: +SKIP
+    """"""
+    try:
+        from geoalchemy2 import Geometry
+        from sqlalchemy import text
+    except ImportError:
+        raise ImportError(""'to_postgis()' requires geoalchemy2 package."")
+
+    gdf = gdf.copy()
+    geom_name = gdf.geometry.name
+
+    # Get srid
+    srid = _get_srid_from_crs(gdf)
+
+    # Get geometry type and info whether data contains LinearRing.
+    geometry_type, has_curve = _get_geometry_type(gdf)
+
+    # Build dtype with Geometry
+    if dtype is not None:
+        dtype[geom_name] = Geometry(geometry_type=geometry_type, srid=srid)
+    else:
+        dtype = {geom_name: Geometry(geometry_type=geometry_type, srid=srid)}
+
+    # Convert LinearRing geometries to LineString
+    if has_curve:
+        gdf = _convert_linearring_to_linestring(gdf, geom_name)
+
+    # Convert geometries to EWKB
+    gdf = _convert_to_ewkb(gdf, geom_name, srid)
+
+    if schema is not None:
+        schema_name = schema
+    else:
+        schema_name = ""public""
+
+    if if_exists == ""append"":
+        # Check that the geometry srid matches with the current GeoDataFrame
+        with _get_conn(con) as connection:
+            # Only check SRID if table exists
+            if connection.dialect.has_table(connection, name, schema):
+                target_srid = connection.execute(
+                    text(f""SELECT Find_SRID('{schema_name}', '{name}', '{geom_name}');"")
+                ).fetchone()[0]
+
+                if target_srid != srid:
+                    msg = (
+                        f""The CRS of the target table (EPSG:{target_srid}) differs ""
+                        f""from the CRS of current GeoDataFrame (EPSG:{srid}).""
+                    )
+                    raise ValueError(msg)
+
+    with _get_conn(con) as connection:
+        gdf.to_sql(
+            name,
+            connection,
+            schema=schema_name,
+            if_exists=if_exists,
+            index=index,
+            index_label=index_label,
+            chunksize=chunksize,
+            dtype=dtype,
+            method=_psql_insert_copy,
+        )","def _write_postgis(
+    gdf,
+    name,
+    con,
+    schema=None,
+    if_exists=""fail"",
+    index=False,
+    index_label=None,
+    chunksize=None,
+    dtype=None,
+):
+    """"""
+    Upload GeoDataFrame into PostGIS database.
+
+    This method requires SQLAlchemy and GeoAlchemy2, and a PostgreSQL
+    Python driver (e.g. psycopg2) to be installed.
+
+    Parameters
+    ----------
+    name : str
+        Name of the target table.
+    con : sqlalchemy.engine.Connection or sqlalchemy.engine.Engine
+        Active connection to the PostGIS database.
+    if_exists : {'fail', 'replace', 'append'}, default 'fail'
+        How to behave if the table already exists:
+
+        - fail: Raise a ValueError.
+        - replace: Drop the table before inserting new values.
+        - append: Insert new values to the existing table.
+    schema : string, optional
+        Specify the schema. If None, use default schema: 'public'.
+    index : bool, default True
+        Write DataFrame index as a column.
+        Uses *index_label* as the column name in the table.
+    index_label : string or sequence, default None
+        Column label for index column(s).
+        If None is given (default) and index is True,
+        then the index names are used.
+    chunksize : int, optional
+        Rows will be written in batches of this size at a time.
+        By default, all rows will be written at once.
+    dtype : dict of column name to SQL type, default None
+        Specifying the datatype for columns.
+        The keys should be the column names and the values
+        should be the SQLAlchemy types.
+
+    Examples
+    --------
+    >>> from sqlalchemy import create_engine  # doctest: +SKIP
+    >>> engine = create_engine(""postgresql://myusername:mypassword@myhost:5432\
+/mydatabase"";)  # doctest: +SKIP
+    >>> gdf.to_postgis(""my_table"", engine)  # doctest: +SKIP
+    """"""
+    try:
+        from geoalchemy2 import Geometry
+        from sqlalchemy import text
+    except ImportError:
+        raise ImportError(""'to_postgis()' requires geoalchemy2 package."")
+
+    gdf = gdf.copy()
+    geom_name = gdf.geometry.name
+
+    # Get srid
+    srid = _get_srid_from_crs(gdf)
+
+    # Get geometry type and info whether data contains LinearRing.
+    geometry_type, has_curve = _get_geometry_type(gdf)
+
+    # Build dtype with Geometry
+    if dtype is not None:
+        dtype[geom_name] = Geometry(geometry_type=geometry_type, srid=srid)
+    else:
+        dtype = {geom_name: Geometry(geometry_type=geometry_type, srid=srid)}
+
+    # Convert LinearRing geometries to LineString
+    if has_curve:
+        gdf = _convert_linearring_to_linestring(gdf, geom_name)
+
+    # Convert geometries to EWKB
+    gdf = _convert_to_ewkb(gdf, geom_name, srid)
+
+    if schema is not None:
+        schema_name = schema
+    else:
+        schema_name = ""public""
+
+    if if_exists == ""append"":
+        # Check that the geometry srid matches with the current GeoDataFrame
+        with _get_conn(con) as connection:
+            # Only check SRID if table exists
+            if connection.dialect.has_table(connection, name, schema):
+                target_srid = connection.execute(
+                    text(
+                        ""SELECT Find_SRID(:schema_name, :name, :geom_name);""
+                    ).bindparams(
+                        schema_name=schema_name, name=name, geom_name=geom_name
+                    )
+                ).fetchone()[0]
+
+                if target_srid != srid:
+                    msg = (
+                        f""The CRS of the target table (EPSG:{target_srid}) differs ""
+                        f""from the CRS of current GeoDataFrame (EPSG:{srid}).""
+                    )
+                    raise ValueError(msg)
+
+    with _get_conn(con) as connection:
+        gdf.to_sql(
+            name,
+            connection,
+            schema=schema_name,
+            if_exists=if_exists,
+            index=index,
+            index_label=index_label,
+            chunksize=chunksize,
+            dtype=dtype,
+            method=_psql_insert_copy,
+        )"
+Command Injection,"def find_file(file_path: str, args: str = """", ctf=None) -> str:
+    """"""
+    Find a file in the filesystem.
+    """"""
+    command = f'find {file_path} {args}'
+    return run_command(command, ctf=ctf)","def find_file(file_path: str, args: str = """", ctf=None) -> str:
+    """"""
+    Find a file in the filesystem.
+    """"""
+    # Block dangerous flags that enable RCE, file writes, or deletion
+    for flag in DANGEROUS_FIND_FLAGS:
+        if flag in args:
+            return f""Error: DANGEROUS flag '{flag}' is not allowed""
+    
+    command = f'find {file_path} {args}'
+    return run_command(command, ctf=ctf)"
+Path Traversal,"    def _attachment_file_name(self) -> str:
+        """"""The original name of the attached file, no path.
+
+        This value is 'unknown' if it is not present in the MSG file (not expected).
+        """"""
+        return self._attachment.file_name or ""unknown""","    def _attachment_file_name(self) -> str:
+        """"""The original name of the attached file, no path.
+
+        This value is 'unknown' if it is not present in the MSG file (not expected).
+        The filename is sanitized to prevent path traversal attacks.
+        """"""
+        raw_filename = self._attachment.file_name or ""unknown""
+
+        # Sanitize the filename to prevent path traversal attacks
+        # Remove any path components for both Unix and Windows paths
+        # Use both separators to handle cross-platform attacks
+        safe_filename = os.path.basename(raw_filename.replace(""\\"", ""/""))
+
+        # Remove null bytes and other control characters
+        safe_filename = safe_filename.replace(""\0"", """")
+
+        # If the filename becomes empty after sanitization, use a default
+        if not safe_filename or safe_filename in (""."", ""..""):
+            safe_filename = ""unknown""
+
+        return safe_filename"
+SSRF,"async def download_item(
+    item: FileUrl,
+    data_format: Literal['bytes', 'base64', 'base64_uri', 'text'] = 'bytes',
+    type_format: Literal['mime', 'extension'] = 'mime',
+) -> DownloadedItem[str] | DownloadedItem[bytes]:
+    """"""Download an item by URL and return the content as a bytes object or a (base64-encoded) string.
+
+    Args:
+        item: The item to download.
+        data_format: The format to return the content in:
+            - `bytes`: The raw bytes of the content.
+            - `base64`: The base64-encoded content.
+            - `base64_uri`: The base64-encoded content as a data URI.
+            - `text`: The content as a string.
+        type_format: The format to return the media type in:
+            - `mime`: The media type as a MIME type.
+            - `extension`: The media type as an extension.
+
+    Raises:
+        UserError: If the URL points to a YouTube video or its protocol is gs://.
+    """"""
+    if item.url.startswith('gs://'):
+        raise UserError('Downloading from protocol ""gs://"" is not supported.')
+    elif item.url.startswith('s3://'):
+        raise UserError('Downloading from protocol ""s3://"" is not supported.')
+    elif isinstance(item, VideoUrl) and item.is_youtube:
+        raise UserError('Downloading YouTube videos is not supported.')
+
+    client = cached_async_http_client()
+    response = await client.get(item.url, follow_redirects=True)
+    response.raise_for_status()
+
+    if content_type := response.headers.get('content-type'):
+        content_type = content_type.split(';')[0]
+        if content_type == 'application/octet-stream':
+            content_type = None
+
+    media_type = content_type or item.media_type
+
+    data_type = media_type
+    if type_format == 'extension':
+        data_type = item.format
+
+    data = response.content
+    if data_format in ('base64', 'base64_uri'):
+        data = base64.b64encode(data).decode('utf-8')
+        if data_format == 'base64_uri':
+            data = f'data:{media_type};base64,{data}'
+        return DownloadedItem[str](data=data, data_type=data_type)
+    elif data_format == 'text':
+        return DownloadedItem[str](data=data.decode('utf-8'), data_type=data_type)
+    else:
+        return DownloadedItem[bytes](data=data, data_type=data_type)","async def download_item(
+    item: FileUrl,
+    data_format: Literal['bytes', 'base64', 'base64_uri', 'text'] = 'bytes',
+    type_format: Literal['mime', 'extension'] = 'mime',
+) -> DownloadedItem[str] | DownloadedItem[bytes]:
+    """"""Download an item by URL and return the content as a bytes object or a (base64-encoded) string.
+
+    This function includes SSRF (Server-Side Request Forgery) protection:
+    - Only http:// and https:// protocols are allowed
+    - Private/internal IP addresses are blocked by default
+    - Cloud metadata endpoints (169.254.169.254) are always blocked
+    - Hostnames are resolved before requests to prevent DNS rebinding
+
+    Set `item.force_download='allow-local'` to allow private IP addresses.
+
+    Args:
+        item: The item to download.
+        data_format: The format to return the content in:
+            - `bytes`: The raw bytes of the content.
+            - `base64`: The base64-encoded content.
+            - `base64_uri`: The base64-encoded content as a data URI.
+            - `text`: The content as a string.
+        type_format: The format to return the media type in:
+            - `mime`: The media type as a MIME type.
+            - `extension`: The media type as an extension.
+
+    Raises:
+        UserError: If the URL points to a YouTube video.
+        ValueError: If the URL uses an unsupported protocol or targets a private/internal
+            IP address (unless allow-local is set).
+    """"""
+    if isinstance(item, VideoUrl) and item.is_youtube:
+        raise UserError('Downloading YouTube videos is not supported.')
+
+    from .._ssrf import safe_download
+
+    allow_local = item.force_download == 'allow-local'
+    response = await safe_download(item.url, allow_local=allow_local)
+
+    if content_type := response.headers.get('content-type'):
+        content_type = content_type.split(';')[0]
+        if content_type == 'application/octet-stream':
+            content_type = None
+
+    media_type = content_type or item.media_type
+
+    data_type = media_type
+    if type_format == 'extension':
+        data_type = item.format
+
+    data = response.content
+    if data_format in ('base64', 'base64_uri'):
+        data = base64.b64encode(data).decode('utf-8')
+        if data_format == 'base64_uri':
+            data = f'data:{media_type};base64,{data}'
+        return DownloadedItem[str](data=data, data_type=data_type)
+    elif data_format == 'text':
+        return DownloadedItem[str](data=data.decode('utf-8'), data_type=data_type)
+    else:
+        return DownloadedItem[bytes](data=data, data_type=data_type)"
+Insecure Deserialization,"def serializable(my_id: int, my_file_ext: str) -> Any:
+    """"""
+    Decorator for a serializable class -- i.e. subclass of
+    :class:`~epyt_flow.serialization.Serializable`.
+
+    This decorator registers a new class as a serializable class.
+
+    Parameters
+    ----------
+    my_id : `int`
+        ID of the class.
+    my_file_ext : `str`
+        File extension.
+    """"""
+    def wrapper(my_class):
+        @staticmethod
+        def unpackb(data: bytes) -> Any:
+            return my_class(**my_unpackb(data))
+        setattr(my_class, ""unpackb"", unpackb)
+
+        @staticmethod
+        def file_ext() -> str:
+            return my_file_ext
+        setattr(my_class, ""file_ext"", file_ext)
+
+        return umsgpack.ext_serializable(my_id)(my_class)
+
+    return wrapper","def serializable(my_id: int, my_file_ext: str) -> Any:
+    """"""
+    Decorator for a serializable class -- i.e. subclass of
+    :class:`~epyt_flow.serialization.Serializable`.
+
+    This decorator registers a new class as a serializable class.
+
+    Parameters
+    ----------
+    my_id : `int`
+        ID of the class.
+    my_file_ext : `str`
+        File extension.
+    """"""
+    def wrapper(my_class):
+        if issubclass(my_class, JsonSerializable):
+            JSON_SERIALIZABLE[(my_class.__module__, my_class.__name__)] = my_class
+
+        @staticmethod
+        def unpackb(data: bytes) -> Any:
+            return my_class(**my_unpackb(data))
+        setattr(my_class, ""unpackb"", unpackb)
+
+        @staticmethod
+        def file_ext() -> str:
+            return my_file_ext
+        setattr(my_class, ""file_ext"", file_ext)
+
+        return umsgpack.ext_serializable(my_id)(my_class)
+
+    return wrapper"
+Insecure Deserialization,"    def __object_hook(obj: dict) -> dict:
+        if ""__type__"" in obj:
+            module_name, class_name = obj[""__type__""]
+            cls = getattr(importlib.import_module(module_name), class_name)
+            del obj[""__type__""]
+
+            for attr in obj:
+                if isinstance(attr, dict):
+                    obj[attr] = __object_hook(obj[attr])
+
+            return cls(**obj)
+        return obj","    def __object_hook(obj: dict):
+        t = obj.get(""__type__"")
+        if not t:
+            return obj
+
+        if not (isinstance(t, (list, tuple)) and len(t) == 2 and
+                all(isinstance(x, str) for x in t)):
+            raise ValueError(""Invalid __type__"")
+
+        key = (t[0], t[1])
+        cls = JSON_SERIALIZABLE.get(key)
+        if cls is None:
+            raise ValueError(f""Type not allowed: {key}"")
+
+        args = {k: v for k, v in obj.items() if k != ""__type__""}
+        return cls(**args)"

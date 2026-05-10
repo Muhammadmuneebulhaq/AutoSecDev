@@ -1,0 +1,5 @@
+for training
+https://www.kaggle.com/datasets/jiscecseaiml/vulnerability-fix-dataset
+
+for testing and comparing
+https://www.kaggle.com/datasets/hasaber8/cve-fix-pairs

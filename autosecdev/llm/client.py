@@ -24,12 +24,8 @@ class LLMClient:
         try:
             if self.provider == "ollama":
                 return self._complete_ollama(prompt=prompt, temperature=temperature)
-            if self.provider == "openai":
-                return self._complete_openai(prompt=prompt, temperature=temperature)
-            if self.provider == "claude":
-                return self._complete_claude(prompt=prompt, temperature=temperature)
-            if self.provider == "gemini":
-                return self._complete_gemini(prompt=prompt, temperature=temperature)
+            if self.provider == "openrouter":
+                return self._complete_openrouter(prompt=prompt, temperature=temperature)
             # Research fallback: returns empty completion so pipeline stays runnable.
             return ""
         except Exception as e:
@@ -73,67 +69,32 @@ class LLMClient:
             return str(data.get("response", "")).strip()
         return self._retry_with_backoff(_request)
 
-    def _complete_openai(self, *, prompt: str, temperature: float) -> str:
-        if not settings.openai_api_key:
+    def _complete_openrouter(self, *, prompt: str, temperature: float) -> str:
+        if not settings.openrouter_api_key:
+            import sys
+            print(f"[LLM ERROR] OpenRouter API key not set", file=sys.stderr)
+            return ""
+        if not settings.openrouter_model:
+            import sys
+            print(f"[LLM ERROR] OpenRouter model not set", file=sys.stderr)
             return ""
         def _request():
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {settings.openai_api_key}"}
+            url = "https://openrouter.ai/api/v1/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {settings.openrouter_api_key}",
+                "HTTP-Referer": "https://autosecdev.local",
+            }
             payload = {
-                "model": settings.openai_model,
+                "model": settings.openrouter_model,
                 "messages": [{"role": "user", "content": prompt}],
                 "temperature": temperature,
             }
+            import sys
+            print(f"[LLM DEBUG] OpenRouter request: model={settings.openrouter_model}, url={url}", file=sys.stderr)
             r = requests.post(url, headers=headers, json=payload, timeout=120)
             r.raise_for_status()
             data = r.json()
+            print(f"[LLM DEBUG] OpenRouter response received", file=sys.stderr)
             return str(data["choices"][0]["message"]["content"]).strip()
-        return self._retry_with_backoff(_request)
-
-    def _complete_claude(self, *, prompt: str, temperature: float) -> str:
-        if not settings.anthropic_api_key:
-            return ""
-        def _request():
-            url = "https://api.anthropic.com/v1/messages"
-            headers = {
-                "x-api-key": settings.anthropic_api_key,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            }
-            payload = {
-                "model": settings.anthropic_model,
-                "max_tokens": 1200,
-                "temperature": temperature,
-                "messages": [{"role": "user", "content": prompt}],
-            }
-            r = requests.post(url, headers=headers, data=json.dumps(payload), timeout=120)
-            r.raise_for_status()
-            data = r.json()
-            content = data.get("content") or []
-            if content and isinstance(content, list):
-                # Anthropic returns list of blocks
-                return str(content[0].get("text", "")).strip()
-            return ""
-        return self._retry_with_backoff(_request)
-
-    def _complete_gemini(self, *, prompt: str, temperature: float) -> str:
-        if not settings.gemini_api_key:
-            return ""
-        def _request():
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{settings.gemini_model}:generateContent?key={settings.gemini_api_key}"
-            payload = {
-                "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": temperature},
-            }
-            r = requests.post(url, json=payload, timeout=120)
-            r.raise_for_status()
-            data = r.json()
-            candidates = data.get("candidates") or []
-            if candidates and isinstance(candidates, list):
-                content = candidates[0].get("content") or {}
-                parts = content.get("parts") or []
-                if parts and isinstance(parts, list):
-                    return str(parts[0].get("text", "")).strip()
-            return ""
         return self._retry_with_backoff(_request)
 

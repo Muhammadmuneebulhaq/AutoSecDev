@@ -79,3 +79,10 @@ _prd_text.txt
 Generative_AI_Project_Ideas.pdf
 Project Task-1.pdf
 .cve.gz
+Models/
+.kiro/IMPLEMENTATION_SUMMARY.md
+QUICK_START.md
+FIXES_APPLIED.md
+debug_codet5.py
+LOCAL_MODELS_QUICKSTART.md
+STATUS.md

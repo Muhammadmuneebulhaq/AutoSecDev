@@ -1,0 +1,3808 @@
+vulnerability_type,vulnerable_code,fixed_code
+SQL Injection,"    protected List<SearchResult> searchSpaces(String keywords, String wikiName, int number, int start)
+        throws QueryException, IllegalArgumentException, UriBuilderException, XWikiException
+    {
+        List<SearchResult> result = new ArrayList<SearchResult>();
+
+        if (StringUtils.isEmpty(keywords)) {
+            return result;
+        }
+        String escapedKeywords = keywords.replaceAll(""([%_!])"", ""!$1"");
+
+        String query = ""select space.reference from XWikiSpace as space""
+            + "" where lower(space.name) like lower(:keywords) escape '!'""
+            + "" or lower(space.reference) like lower(:prefix) escape '!'""
+            + "" order by lower(space.reference), space.reference"";
+
+        List<Object> queryResult = queryManager.createQuery(query, Query.HQL)
+            .bindValue(""keywords"", String.format(""%%%s%%"", escapedKeywords))
+            .bindValue(""prefix"", String.format(""%s%%"", escapedKeywords))
+            .setWiki(wikiName).setLimit(number).setOffset(start)
+            .addFilter(this.hiddenSpaceFilterProvider.get()).execute();
+
+        XWiki xwikiApi = Utils.getXWikiApi(componentManager);
+        for (Object object : queryResult) {
+            String spaceId = (String) object;
+            List<String> spaces = Utils.getSpacesFromSpaceId(spaceId);
+            SpaceReference spaceReference = new SpaceReference(wikiName, spaces);
+
+            if (this.authorizationManager.hasAccess(Right.VIEW, spaceReference)) {
+                Document spaceDoc = xwikiApi.getDocument(spaceReference);
+
+                SearchResult searchResult = objectFactory.createSearchResult();
+                searchResult.setType(""space"");
+                searchResult.setId(spaceId);
+                searchResult.setWiki(wikiName);
+                searchResult.setSpace(spaceId);
+                searchResult.setTitle(spaceDoc != null ? spaceDoc.getPlainTitle() : spaceReference.getName());
+
+                List<String> restSpacesValue = Utils.getSpacesURLElements(spaces);
+
+                // Add a link to the space information.
+                Link spaceLink = new Link();
+                spaceLink.setRel(Relations.SPACE);
+                spaceLink.setHref(
+                    Utils.createURI(uriInfo.getBaseUri(), SpaceResource.class, wikiName, restSpacesValue).toString());
+                searchResult.getLinks().add(spaceLink);
+
+                // Add a link to the home page if it exists and it is viewable.
+                if (spaceDoc != null && !spaceDoc.isNew()) {
+                    Link pageLink = new Link();
+                    pageLink.setHref(Utils.createURI(uriInfo.getBaseUri(), PageResource.class, wikiName,
+                        restSpacesValue, spaceDoc.getDocumentReference().getName()).toString());
+                    pageLink.setRel(Relations.HOME);
+                    searchResult.getLinks().add(pageLink);
+                }
+
+                result.add(searchResult);
+            }
+        }
+
+        return result;
+    }","    protected List<SearchResult> searchSpaces(String keywords, String wikiName, int number, int start)
+        throws QueryException, IllegalArgumentException, UriBuilderException, XWikiException
+    {
+        List<SearchResult> result = new ArrayList<SearchResult>();
+
+        if (StringUtils.isEmpty(keywords)) {
+            return result;
+        }
+        String escapedKeywords = keywords.replaceAll(""([%_!])"", ""!$1"");
+
+        String query = ""select space.reference from XWikiSpace as space""
+            + "" where lower(space.name) like lower(:keywords) escape '!'""
+            + "" or lower(space.reference) like lower(:prefix) escape '!'""
+            + "" order by lower(space.reference), space.reference"";
+
+        List<Object> queryResult = this.secureQueryManager.createQuery(query, Query.HQL)
+            .bindValue(""keywords"", String.format(""%%%s%%"", escapedKeywords))
+            .bindValue(""prefix"", String.format(""%s%%"", escapedKeywords))
+            .setWiki(wikiName).setLimit(number).setOffset(start)
+            .addFilter(this.hiddenSpaceFilterProvider.get()).execute();
+
+        XWiki xwikiApi = Utils.getXWikiApi(componentManager);
+        for (Object object : queryResult) {
+            String spaceId = (String) object;
+            List<String> spaces = Utils.getSpacesFromSpaceId(spaceId);
+            SpaceReference spaceReference = new SpaceReference(wikiName, spaces);
+
+            if (this.authorizationManager.hasAccess(Right.VIEW, spaceReference)) {
+                Document spaceDoc = xwikiApi.getDocument(spaceReference);
+
+                SearchResult searchResult = objectFactory.createSearchResult();
+                searchResult.setType(""space"");
+                searchResult.setId(spaceId);
+                searchResult.setWiki(wikiName);
+                searchResult.setSpace(spaceId);
+                searchResult.setTitle(spaceDoc != null ? spaceDoc.getPlainTitle() : spaceReference.getName());
+
+                List<String> restSpacesValue = Utils.getSpacesURLElements(spaces);
+
+                // Add a link to the space information.
+                Link spaceLink = new Link();
+                spaceLink.setRel(Relations.SPACE);
+                spaceLink.setHref(
+                    Utils.createURI(uriInfo.getBaseUri(), SpaceResource.class, wikiName, restSpacesValue).toString());
+                searchResult.getLinks().add(spaceLink);
+
+                // Add a link to the home page if it exists and it is viewable.
+                if (spaceDoc != null && !spaceDoc.isNew()) {
+                    Link pageLink = new Link();
+                    pageLink.setHref(Utils.createURI(uriInfo.getBaseUri(), PageResource.class, wikiName,
+                        restSpacesValue, spaceDoc.getDocumentReference().getName()).toString());
+                    pageLink.setRel(Relations.HOME);
+                    searchResult.getLinks().add(pageLink);
+                }
+
+                result.add(searchResult);
+            }
+        }
+
+        return result;
+    }"
+SQL Injection,"    public History getModifications(String wikiName, Integer start, Integer number, String order, Long ts,
+            Boolean withPrettyNames) throws XWikiRestException
+    {
+        try {
+            History history = new History();
+
+            String query = String.format(""select doc.space, doc.name, doc.language, rcs.id, rcs.date, rcs.author,""
+                + "" rcs.comment from XWikiRCSNodeInfo as rcs, XWikiDocument as doc where rcs.id.docId = doc.id and""
+                + "" rcs.date > :date order by rcs.date %s, rcs.id.version1 %s, rcs.id.version2 %s"",
+                    order, order, order);
+
+            List<Object> queryResult = null;
+            queryResult = queryManager.createQuery(query, Query.XWQL).bindValue(""date"", new Date(ts)).setLimit(number)
+                    .setOffset(start).setWiki(wikiName).execute();
+
+            for (Object object : queryResult) {
+                Object[] fields = (Object[]) object;
+
+                String spaceId = (String) fields[0];
+                List<String> spaces = Utils.getSpacesFromSpaceId(spaceId);
+                String pageName = (String) fields[1];
+
+                DocumentReference documentReference =
+                    this.resolver.resolve(Utils.getPageId(wikiName, spaces, pageName));
+                if (this.authorizationManager.hasAccess(VIEW, documentReference)) {
+                    String language = (String) fields[2];
+                    if (language.equals("""")) {
+                        language = null;
+                    }
+                    XWikiRCSNodeId nodeId = (XWikiRCSNodeId) fields[3];
+                    Timestamp timestamp = (Timestamp) fields[4];
+                    Date modified = new Date(timestamp.getTime());
+                    String modifier = (String) fields[5];
+                    String comment = (String) fields[6];
+
+                    HistorySummary historySummary =
+                        DomainObjectFactory.createHistorySummary(this.objectFactory, this.uriInfo.getBaseUri(),
+                            wikiName, spaces, pageName, language, nodeId.getVersion(), modifier, modified, comment,
+                            Utils.getXWikiApi(this.componentManager), withPrettyNames);
+                    history.getHistorySummaries().add(historySummary);
+                }
+            }
+
+            return history;
+        } catch (QueryException e) {
+            throw new XWikiRestException(e);
+        }
+    }","    public History getModifications(String wikiName, Integer start, Integer number, String order, Long ts,
+            Boolean withPrettyNames) throws XWikiRestException
+    {
+        try {
+            String validOrder = HqlQueryUtils.getValidQueryOrder(order, ""desc"");
+
+            History history = new History();
+
+            String query = String.format(""select doc.space, doc.name, doc.language, rcs.id, rcs.date, rcs.author,""
+                + "" rcs.comment from XWikiRCSNodeInfo as rcs, XWikiDocument as doc where rcs.id.docId = doc.id and""
+                + "" rcs.date > :date order by rcs.date %s, rcs.id.version1 %s, rcs.id.version2 %s"",
+                validOrder, validOrder, validOrder);
+
+            List<Object> queryResult = null;
+            queryResult = this.queryManager.createQuery(query, Query.XWQL).bindValue(""date"", new Date(ts))
+                .setLimit(number).setOffset(start).setWiki(wikiName).execute();
+
+            for (Object object : queryResult) {
+                Object[] fields = (Object[]) object;
+
+                String spaceId = (String) fields[0];
+                List<String> spaces = Utils.getSpacesFromSpaceId(spaceId);
+                String pageName = (String) fields[1];
+
+                DocumentReference documentReference =
+                    this.resolver.resolve(Utils.getPageId(wikiName, spaces, pageName));
+                if (this.authorizationManager.hasAccess(VIEW, documentReference)) {
+                    String language = (String) fields[2];
+                    if (language.equals("""")) {
+                        language = null;
+                    }
+                    XWikiRCSNodeId nodeId = (XWikiRCSNodeId) fields[3];
+                    Timestamp timestamp = (Timestamp) fields[4];
+                    Date modified = new Date(timestamp.getTime());
+                    String modifier = (String) fields[5];
+                    String comment = (String) fields[6];
+
+                    HistorySummary historySummary =
+                        DomainObjectFactory.createHistorySummary(this.objectFactory, this.uriInfo.getBaseUri(),
+                            wikiName, spaces, pageName, language, nodeId.getVersion(), modifier, modified, comment,
+                            Utils.getXWikiApi(this.componentManager), withPrettyNames);
+                    history.getHistorySummaries().add(historySummary);
+                }
+            }
+
+            return history;
+        } catch (QueryException e) {
+            throw new XWikiRestException(e);
+        }
+    }"
+SQL Injection,"    public void delete(String categoryId) {
+
+        CategoryEntity category = (CategoryEntity) categoryDao.selectById(categoryId);
+        //删除父类
+        if (category != null) {
+            List<CategoryEntity> childrenList = categoryDao.queryChildren(category);
+            List<String> ids = new ArrayList<>();
+            for (int i = 0; i < childrenList.size(); i++) {
+                //删除子类
+                ids.add(childrenList.get(i).getId());
+            }
+            categoryDao.deleteByIds(ids);
+            // 删除文章
+            contentDao.deleteEntityByCategoryIds(ids.toArray(new String[ids.size()]));
+
+            //获取被删节点的父节点
+            CategoryEntity parentNode = categoryDao.selectById(category.getCategoryId());
+            //获取被删节点的所属栏目的其他节点
+            List<CategoryEntity> childNode = categoryDao.queryChildren(parentNode);
+            //判断删除的是否为主节点
+            if (parentNode != null) {
+                LambdaUpdateWrapper<CategoryEntity> updateWrapper = new LambdaUpdateWrapper<>();
+                //如果没有子节点进行更新代码
+                if (childNode.size() == 1) {
+                    // 更新父级为叶子节点
+                    updateWrapper.eq(CategoryEntity::getCategoryId, parentNode.getId())
+                            .set(CategoryEntity::getLeaf, true);
+                    categoryDao.update(null, updateWrapper);
+                }
+
+            }
+
+        }
+    }","    public void delete(String categoryId) {
+
+        CategoryEntity category = (CategoryEntity) categoryDao.selectById(categoryId);
+        //删除父类
+        if (category != null) {
+            List<CategoryEntity> childrenList = categoryDao.queryChildren(category);
+            List<String> ids = new ArrayList<>();
+            for (int i = 0; i < childrenList.size(); i++) {
+                //删除子类
+                ids.add(childrenList.get(i).getId());
+            }
+            categoryDao.deleteByIds(ids);
+            // 删除文章
+            contentDao.deleteEntityByCategoryIds(ids.toArray(new String[ids.size()]));
+
+            //获取被删节点的父节点
+            CategoryEntity parentNode = categoryDao.selectById(category.getCategoryId());
+            //获取被删节点的所属栏目的其他节点
+            List<CategoryEntity> childNode = categoryDao.queryChildren(parentNode);
+            //判断删除的是否为主节点
+            if (parentNode != null) {
+                LambdaUpdateWrapper<CategoryEntity> updateWrapper = new LambdaUpdateWrapper<>();
+                //如果没有子节点进行更新代码
+                if (childNode.size() == 1) {
+                    // 更新父级为叶子节点
+                    updateWrapper.eq(CategoryEntity::getId, parentNode.getId())
+                            .set(CategoryEntity::getLeaf, true);
+                    categoryDao.update(null, updateWrapper);
+                }
+
+            }
+
+        }
+    }"
+Command Injection,"/*
+ * Copyright 2015-2024 Ritense BV, the Netherlands.
+ *
+ * Licensed under EUPL, Version 1.2 (the ""License"");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an ""AS IS"" basis,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.ritense.valtimo.autoconfigure;
+
+import com.ritense.valtimo.CamundaWhitelistedBeansPlugin;
+import com.ritense.valtimo.contract.annotation.ProcessBean;
+import java.util.Map;
+import org.camunda.bpm.spring.boot.starter.configuration.Ordering;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.core.annotation.Order;
+
+@AutoConfiguration
+@ConditionalOnProperty(prefix = ""valtimo.camunda"", name = ""bean-whitelisting"", havingValue = ""true"", matchIfMissing = true)
+public class CamundaContextConfiguration {
+
+    @Bean
+    @Order(Ordering.DEFAULT_ORDER - 1)
+    public CamundaWhitelistedBeansPlugin camundaWhitelistedBeansPlugin(
+        @Lazy @ProcessBean Map<String, Object> processBeans,
+        ApplicationContext applicationContext
+    ) {
+        return new CamundaWhitelistedBeansPlugin(processBeans, applicationContext);
+    }
+
+}
+","/*
+ * Copyright 2015-2024 Ritense BV, the Netherlands.
+ *
+ * Licensed under EUPL, Version 1.2 (the ""License"");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ * https://joinup.ec.europa.eu/collection/eupl/eupl-text-eupl-12
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an ""AS IS"" basis,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.ritense.valtimo.autoconfigure;
+
+import com.ritense.valtimo.CamundaWhitelistedBeansPlugin;
+import com.ritense.valtimo.ScriptingWhitelistPlugin;
+import com.ritense.valtimo.contract.annotation.ProcessBean;
+import java.util.Map;
+import java.util.Set;
+import org.camunda.bpm.spring.boot.starter.configuration.Ordering;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.AutoConfiguration;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Lazy;
+import org.springframework.core.annotation.Order;
+
+@AutoConfiguration
+public class CamundaContextConfiguration {
+
+    @Bean
+    @Order(Ordering.DEFAULT_ORDER - 1)
+    @ConditionalOnProperty(prefix = ""valtimo.camunda"", name = ""bean-whitelisting"", havingValue = ""true"", matchIfMissing = true)
+    public CamundaWhitelistedBeansPlugin camundaWhitelistedBeansPlugin(
+        @Lazy @ProcessBean Map<String, Object> processBeans,
+        ApplicationContext applicationContext
+    ) {
+        return new CamundaWhitelistedBeansPlugin(processBeans, applicationContext);
+    }
+
+    @Bean
+    @Order(Ordering.DEFAULT_ORDER - 1)
+    public ScriptingWhitelistPlugin scriptingWhitelistPlugin(
+        @Value(""valtimo.camunda.scripting.allowedClasses"") Set<String> allowedScriptingClasses
+    ) {
+        return new ScriptingWhitelistPlugin(allowedScriptingClasses);
+    }
+
+}
+"
+XXE Injection,"    private void handleZipStream(ZipInputStream zipStream, Metadata metadata, ParseContext context,
+                                 EndDocumentShieldingContentHandler handler,
+                                 EmbeddedDocumentUtil embeddedDocumentUtil)
+            throws IOException, TikaException, SAXException {
+        ZipEntry entry = zipStream.getNextEntry();
+        if (entry == null) {
+            throw new IOException(""No entries found in ZipInputStream"");
+        }
+        List<SAXException> exceptions = new ArrayList<>();
+        do {
+            try {
+                handleZipEntry(entry, zipStream, metadata, context, handler,
+                        embeddedDocumentUtil);
+            } catch (SAXException e) {
+                WriteLimitReachedException.throwIfWriteLimitReached(e);
+                if (e.getCause() instanceof EncryptedDocumentException) {
+                    throw (EncryptedDocumentException)e.getCause();
+                } else {
+                    exceptions.add(e);
+                }
+            }
+            entry = zipStream.getNextEntry();
+        } while (entry != null);
+
+        if (exceptions.size() > 0) {
+            throw exceptions.get(0);
+        }
+    }","            handleZipEntry(entry, zipFile.getInputStream(entry), metadata, context,
+                    handler, embeddedDocumentUtil);
+        }
+
+        entry = zipFile.getEntry(META_NAME);
+        if (entry != null) {
+            handleZipEntry(entry, zipFile.getInputStream(entry), metadata, context,
+                    handler, embeddedDocumentUtil);
+        }
+
+        Enumeration<? extends ZipEntry> entries = zipFile.entries();
+        while (entries.hasMoreElements()) {
+            entry = entries.nextElement();
+            if (!META_NAME.equals(entry.getName())) {
+                handleZipEntry(entry, zipFile.getInputStream(entry), metadata,
+                        context, handler, embeddedDocumentUtil);
+            }
+        }
+    }
+
+    private void handleZipEntry(ZipEntry entry, InputStream zip, Metadata metadata,
+                                ParseContext context, ContentHandler handler,
+                                EmbeddedDocumentUtil embeddedDocumentUtil)
+            throws IOException, SAXException, TikaException {
+
+        if (entry.isDirectory()) {
+            return;
+        }"
+XXE Injection,"    public void parse(InputStream stream, ContentHandler baseHandler, Metadata metadata,
+                      ParseContext context) throws IOException, SAXException, TikaException {
+
+        EmbeddedDocumentUtil embeddedDocumentUtil = new EmbeddedDocumentUtil(context);
+
+        // Open the Zip stream
+        // Use a File if we can, and an already open zip is even better
+        ZipFile zipFile = null;
+        ZipInputStream zipStream = null;
+        if (stream instanceof TikaInputStream) {
+            TikaInputStream tis = (TikaInputStream) stream;
+            Object container = ((TikaInputStream) stream).getOpenContainer();
+            if (container instanceof ZipFile) {
+                zipFile = (ZipFile) container;
+            } else if (tis.hasFile()) {
+                zipFile = new ZipFile(tis.getFile());
+            } else {
+                zipStream = new ZipInputStream(stream);
+            }
+        } else {
+            zipStream = new ZipInputStream(stream);
+        }
+
+        // Prepare to handle the content
+        XHTMLContentHandler xhtml = new XHTMLContentHandler(baseHandler, metadata);
+        xhtml.startDocument();
+        // As we don't know which of the metadata or the content
+        //  we'll hit first, catch the endDocument call initially
+        EndDocumentShieldingContentHandler handler = new EndDocumentShieldingContentHandler(xhtml);
+
+        try {
+            if (zipFile != null) {
+                try {
+                    handleZipFile(zipFile, metadata, context, handler, embeddedDocumentUtil);
+                } finally {
+                    //Do we want to close silently == catch an exception here?
+                    zipFile.close();
+                }
+            } else {
+                try {
+                    handleZipStream(zipStream, metadata, context, handler, embeddedDocumentUtil);
+                } finally {
+                    //Do we want to close silently == catch an exception here?
+                    zipStream.close();
+                }
+            }
+        } catch (SAXException e) {
+            if (e.getCause() instanceof EncryptedDocumentException) {
+                throw (EncryptedDocumentException)e.getCause();
+            }
+            throw e;
+        }
+
+        // Only now call the end document
+        if (handler.isEndDocumentWasCalled()) {
+            handler.reallyEndDocument();
+        }
+    }","    public void parse(InputStream stream, ContentHandler baseHandler, Metadata metadata,
+                      ParseContext context) throws IOException, SAXException, TikaException {
+
+        EmbeddedDocumentUtil embeddedDocumentUtil = new EmbeddedDocumentUtil(context);
+
+        // Open the Zip stream
+        // Use a File if we can, and an already open zip is even better
+        ZipFile zipFile = null;
+        TikaInputStream tmpTis = null;
+        if (stream instanceof TikaInputStream) {
+            TikaInputStream tis = (TikaInputStream) stream;
+            Object container = ((TikaInputStream) stream).getOpenContainer();
+            if (container instanceof ZipFile) {
+                zipFile = (ZipFile) container;
+            } else {
+                zipFile = new ZipFile(tis.getFile());
+                tis.setOpenContainer(zipFile);
+            }
+        } else {
+            tmpTis = TikaInputStream.get(stream);
+            tmpTis.setOpenContainer(new ZipFile(tmpTis.getFile()));
+            zipFile = (ZipFile) tmpTis.getOpenContainer();
+        }
+        // Prepare to handle the content
+        XHTMLContentHandler xhtml = new XHTMLContentHandler(baseHandler, metadata);
+        xhtml.startDocument();
+        // As we don't know which of the metadata or the content
+        //  we'll hit first, catch the endDocument call initially
+        EndDocumentShieldingContentHandler handler = new EndDocumentShieldingContentHandler(xhtml);
+
+        try {
+            try {
+                handleZipFile(zipFile, metadata, context, handler, embeddedDocumentUtil);
+            } finally {
+                //Do we want to close silently == catch an exception here?
+                if (tmpTis != null) {
+                    //tmpTis handles closing of the open zip container
+                    tmpTis.close();
+                }
+            }
+        } catch (SAXException e) {
+            if (e.getCause() instanceof EncryptedDocumentException) {
+                throw (EncryptedDocumentException)e.getCause();
+            }
+            throw e;
+        }
+
+        // Only now call the end document
+        if (handler.isEndDocumentWasCalled()) {
+            handler.reallyEndDocument();
+        }
+    }"
+SQL Injection,"	function metaIndexes($table, $primary = FALSE, $owner = false)
+	{
+		$false = false;
+		// save old fetch mode
+		global $ADODB_FETCH_MODE;
+		$save = $ADODB_FETCH_MODE;
+		$ADODB_FETCH_MODE = ADODB_FETCH_NUM;
+		if ($this->fetchMode !== FALSE) {
+			$savem = $this->SetFetchMode(FALSE);
+		}
+
+		$pragmaData = array();
+
+		/*
+		* If we want the primary key, we must extract
+		* it from the table statement, and the pragma
+		*/
+		if ($primary)
+		{
+			$sql = sprintf('PRAGMA table_info([%s]);',
+						   strtolower($table)
+						   );
+			$pragmaData = $this->getAll($sql);
+		}
+
+		/*
+		* Exclude the empty entry for the primary index
+		*/
+		$sqlite = ""SELECT name,sql
+					 FROM sqlite_master
+					WHERE type='index'
+					  AND sql IS NOT NULL
+					  AND LOWER(tbl_name)='%s'"";
+
+		$SQL = sprintf($sqlite,
+				     strtolower($table)
+					 );
+
+		$rs = $this->execute($SQL);
+
+		if (!is_object($rs)) {
+			if (isset($savem)) {
+				$this->SetFetchMode($savem);
+			}
+			$ADODB_FETCH_MODE = $save;
+			return $false;
+		}
+
+		$indexes = array ();
+
+		while ($row = $rs->FetchRow())
+		{
+
+			if (!isset($indexes[$row[0]])) {
+				$indexes[$row[0]] = array(
+					'unique' => preg_match(""/unique/i"",$row[1]),
+					'columns' => array()
+				);
+			}
+			/**
+			 * The index elements appear in the SQL statement
+			 * in cols[1] between parentheses
+			 * e.g CREATE UNIQUE INDEX ware_0 ON warehouse (org,warehouse)
+			 */
+			preg_match_all('/\((.*)\)/',$row[1],$indexExpression);
+			$indexes[$row[0]]['columns'] = array_map('trim',explode(',',$indexExpression[1][0]));
+		}
+
+		if (isset($savem)) {
+			$this->SetFetchMode($savem);
+			$ADODB_FETCH_MODE = $save;
+		}
+
+		/*
+		* If we want primary, add it here
+		*/
+		if ($primary){
+
+			/*
+			* Check the previously retrieved pragma to search
+			* with a closure
+			*/
+
+			$pkIndexData = array('unique'=>1,'columns'=>array());
+
+			$pkCallBack = function ($value, $key) use (&$pkIndexData) {
+
+				/*
+				* As we iterate the elements check for pk index and sort
+				*/
+				if ($value[5] > 0)
+				{
+					$pkIndexData['columns'][$value[5]] = strtolower($value[1]);
+					ksort($pkIndexData['columns']);
+				}
+			};
+
+			array_walk($pragmaData,$pkCallBack);
+
+			/*
+			* If we found no columns, there is no
+			* primary index
+			*/
+			if (count($pkIndexData['columns']) > 0)
+				$indexes['PRIMARY'] = $pkIndexData;
+		}
+
+		return $indexes;
+	}","	function metaIndexes($table, $primary = FALSE, $owner = false)
+	{
+		$false = false;
+		// save old fetch mode
+		global $ADODB_FETCH_MODE;
+		$save = $ADODB_FETCH_MODE;
+		$ADODB_FETCH_MODE = ADODB_FETCH_NUM;
+		if ($this->fetchMode !== FALSE) {
+			$savem = $this->SetFetchMode(FALSE);
+		}
+
+		$table = strtolower($table);
+		$pragmaData = array();
+
+		/*
+		* If we want the primary key, we must extract
+		* it from the table statement, and the pragma
+		*/
+		if ($primary)
+		{
+			$sql = 'PRAGMA table_info(?)';
+			$pragmaData = $this->getAll($sql, [$table]);
+		}
+
+		// Exclude the empty entry for the primary index
+		$sql = ""SELECT name,sql
+				FROM sqlite_master
+				WHERE type='index'
+				  AND sql IS NOT NULL
+				  AND LOWER(tbl_name)=?"";
+		$rs = $this->execute($sql, [$table]);
+
+		if (!is_object($rs)) {
+			if (isset($savem)) {
+				$this->SetFetchMode($savem);
+			}
+			$ADODB_FETCH_MODE = $save;
+			return $false;
+		}
+
+		$indexes = array ();
+
+		while ($row = $rs->FetchRow())
+		{
+
+			if (!isset($indexes[$row[0]])) {
+				$indexes[$row[0]] = array(
+					'unique' => preg_match(""/unique/i"",$row[1]),
+					'columns' => array()
+				);
+			}
+			/**
+			 * The index elements appear in the SQL statement
+			 * in cols[1] between parentheses
+			 * e.g CREATE UNIQUE INDEX ware_0 ON warehouse (org,warehouse)
+			 */
+			preg_match_all('/\((.*)\)/',$row[1],$indexExpression);
+			$indexes[$row[0]]['columns'] = array_map('trim',explode(',',$indexExpression[1][0]));
+		}
+
+		if (isset($savem)) {
+			$this->SetFetchMode($savem);
+			$ADODB_FETCH_MODE = $save;
+		}
+
+		/*
+		* If we want primary, add it here
+		*/
+		if ($primary){
+
+			/*
+			* Check the previously retrieved pragma to search
+			* with a closure
+			*/
+
+			$pkIndexData = array('unique'=>1,'columns'=>array());
+
+			$pkCallBack = function ($value, $key) use (&$pkIndexData) {
+
+				/*
+				* As we iterate the elements check for pk index and sort
+				*/
+				if ($value[5] > 0)
+				{
+					$pkIndexData['columns'][$value[5]] = strtolower($value[1]);
+					ksort($pkIndexData['columns']);
+				}
+			};
+
+			array_walk($pragmaData,$pkCallBack);
+
+			/*
+			* If we found no columns, there is no
+			* primary index
+			*/
+			if (count($pkIndexData['columns']) > 0)
+				$indexes['PRIMARY'] = $pkIndexData;
+		}
+
+		return $indexes;
+	}"
+SQL Injection,"	function MetaColumns($table, $normalize=true)
+	{
+		global $ADODB_FETCH_MODE;
+		$false = false;
+		$save = $ADODB_FETCH_MODE;
+		$ADODB_FETCH_MODE = ADODB_FETCH_ASSOC;
+		if ($this->fetchMode !== false) {
+			$savem = $this->SetFetchMode(false);
+		}
+		$rs = $this->Execute(""PRAGMA table_info('$table')"");
+		if (isset($savem)) {
+			$this->SetFetchMode($savem);
+		}
+		if (!$rs) {
+			$ADODB_FETCH_MODE = $save;
+			return $false;
+		}
+		$arr = array();
+		while ($r = $rs->FetchRow()) {
+			$type = explode('(',$r['type']);
+			$size = '';
+			if (sizeof($type)==2) {
+				$size = trim($type[1],')');
+			}
+			$fn = strtoupper($r['name']);
+			$fld = new ADOFieldObject;
+			$fld->name = $r['name'];
+			$fld->type = $type[0];
+			$fld->max_length = $size;
+			$fld->not_null = $r['notnull'];
+			$fld->default_value = $r['dflt_value'];
+			$fld->scale = 0;
+			if (isset($r['pk']) && $r['pk']) {
+				$fld->primary_key=1;
+			}
+			if ($save == ADODB_FETCH_NUM) {
+				$arr[] = $fld;
+			} else {
+				$arr[strtoupper($fld->name)] = $fld;
+			}
+		}
+		$rs->Close();
+		$ADODB_FETCH_MODE = $save;
+		return $arr;
+	}","	function MetaColumns($table, $normalize=true)
+	{
+		global $ADODB_FETCH_MODE;
+		$false = false;
+		$save = $ADODB_FETCH_MODE;
+		$ADODB_FETCH_MODE = ADODB_FETCH_ASSOC;
+		if ($this->fetchMode !== false) {
+			$savem = $this->SetFetchMode(false);
+		}
+
+		$rs = $this->execute(""PRAGMA table_info(?)"", array($table));
+
+		if (isset($savem)) {
+			$this->SetFetchMode($savem);
+		}
+		if (!$rs) {
+			$ADODB_FETCH_MODE = $save;
+			return $false;
+		}
+		$arr = array();
+		while ($r = $rs->FetchRow()) {
+			$type = explode('(',$r['type']);
+			$size = '';
+			if (sizeof($type)==2) {
+				$size = trim($type[1],')');
+			}
+			$fn = strtoupper($r['name']);
+			$fld = new ADOFieldObject;
+			$fld->name = $r['name'];
+			$fld->type = $type[0];
+			$fld->max_length = $size;
+			$fld->not_null = $r['notnull'];
+			$fld->default_value = $r['dflt_value'];
+			$fld->scale = 0;
+			if (isset($r['pk']) && $r['pk']) {
+				$fld->primary_key=1;
+			}
+			if ($save == ADODB_FETCH_NUM) {
+				$arr[] = $fld;
+			} else {
+				$arr[strtoupper($fld->name)] = $fld;
+			}
+		}
+		$rs->Close();
+		$ADODB_FETCH_MODE = $save;
+		return $arr;
+	}"
+Command Injection,"    protected function _text(string $text, array $options = [])
+    {
+        $xAxis   = 0;
+        $yAxis   = 0;
+        $gravity = '';
+        $cmd     = '';
+
+        // Reverse the vertical offset
+        // When the image is positioned at the bottom
+        // we don't want the vertical offset to push it
+        // further down. We want the reverse, so we'll
+        // invert the offset. Note: The horizontal
+        // offset flips itself automatically
+        if ($options['vAlign'] === 'bottom') {
+            $options['vOffset'] *= -1;
+        }
+
+        if ($options['hAlign'] === 'right') {
+            $options['hOffset'] *= -1;
+        }
+
+        // Font
+        if (! empty($options['fontPath'])) {
+            $cmd .= "" -font '{$options['fontPath']}'"";
+        }
+
+        if (isset($options['hAlign'], $options['vAlign'])) {
+            switch ($options['hAlign']) {
+                case 'left':
+                    $xAxis   = $options['hOffset'] + $options['padding'];
+                    $yAxis   = $options['vOffset'] + $options['padding'];
+                    $gravity = $options['vAlign'] === 'top' ? 'NorthWest' : 'West';
+                    if ($options['vAlign'] === 'bottom') {
+                        $gravity = 'SouthWest';
+                        $yAxis   = $options['vOffset'] - $options['padding'];
+                    }
+                    break;
+
+                case 'center':
+                    $xAxis   = $options['hOffset'] + $options['padding'];
+                    $yAxis   = $options['vOffset'] + $options['padding'];
+                    $gravity = $options['vAlign'] === 'top' ? 'North' : 'Center';
+                    if ($options['vAlign'] === 'bottom') {
+                        $yAxis   = $options['vOffset'] - $options['padding'];
+                        $gravity = 'South';
+                    }
+                    break;
+
+                case 'right':
+                    $xAxis   = $options['hOffset'] - $options['padding'];
+                    $yAxis   = $options['vOffset'] + $options['padding'];
+                    $gravity = $options['vAlign'] === 'top' ? 'NorthEast' : 'East';
+                    if ($options['vAlign'] === 'bottom') {
+                        $gravity = 'SouthEast';
+                        $yAxis   = $options['vOffset'] - $options['padding'];
+                    }
+                    break;
+            }
+
+            $xAxis = $xAxis >= 0 ? '+' . $xAxis : $xAxis;
+            $yAxis = $yAxis >= 0 ? '+' . $yAxis : $yAxis;
+
+            $cmd .= "" -gravity {$gravity} -geometry {$xAxis}{$yAxis}"";
+        }
+
+        // Color
+        if (isset($options['color'])) {
+            [$r, $g, $b] = sscanf(""#{$options['color']}"", '#%02x%02x%02x');
+
+            $cmd .= "" -fill 'rgba({$r},{$g},{$b},{$options['opacity']})'"";
+        }
+
+        // Font Size - use points....
+        if (isset($options['fontSize'])) {
+            $cmd .= "" -pointsize {$options['fontSize']}"";
+        }
+
+        // Text
+        $cmd .= "" -annotate 0 '{$text}'"";
+
+        $source      = ! empty($this->resource) ? $this->resource : $this->image()->getPathname();
+        $destination = $this->getResourcePath();
+
+        $cmd = "" '{$source}' {$cmd} '{$destination}'"";
+
+        $this->process($cmd);
+    }","    protected function _text(string $text, array $options = [])
+    {
+        $xAxis   = 0;
+        $yAxis   = 0;
+        $gravity = '';
+        $cmd     = '';
+
+        // Reverse the vertical offset
+        // When the image is positioned at the bottom
+        // we don't want the vertical offset to push it
+        // further down. We want the reverse, so we'll
+        // invert the offset. Note: The horizontal
+        // offset flips itself automatically
+        if ($options['vAlign'] === 'bottom') {
+            $options['vOffset'] *= -1;
+        }
+
+        if ($options['hAlign'] === 'right') {
+            $options['hOffset'] *= -1;
+        }
+
+        // Font
+        if (! empty($options['fontPath'])) {
+            $cmd .= ' -font ' . escapeshellarg($options['fontPath']);
+        }
+
+        if (isset($options['hAlign'], $options['vAlign'])) {
+            switch ($options['hAlign']) {
+                case 'left':
+                    $xAxis   = $options['hOffset'] + $options['padding'];
+                    $yAxis   = $options['vOffset'] + $options['padding'];
+                    $gravity = $options['vAlign'] === 'top' ? 'NorthWest' : 'West';
+                    if ($options['vAlign'] === 'bottom') {
+                        $gravity = 'SouthWest';
+                        $yAxis   = $options['vOffset'] - $options['padding'];
+                    }
+                    break;
+
+                case 'center':
+                    $xAxis   = $options['hOffset'] + $options['padding'];
+                    $yAxis   = $options['vOffset'] + $options['padding'];
+                    $gravity = $options['vAlign'] === 'top' ? 'North' : 'Center';
+                    if ($options['vAlign'] === 'bottom') {
+                        $yAxis   = $options['vOffset'] - $options['padding'];
+                        $gravity = 'South';
+                    }
+                    break;
+
+                case 'right':
+                    $xAxis   = $options['hOffset'] - $options['padding'];
+                    $yAxis   = $options['vOffset'] + $options['padding'];
+                    $gravity = $options['vAlign'] === 'top' ? 'NorthEast' : 'East';
+                    if ($options['vAlign'] === 'bottom') {
+                        $gravity = 'SouthEast';
+                        $yAxis   = $options['vOffset'] - $options['padding'];
+                    }
+                    break;
+            }
+
+            $xAxis = $xAxis >= 0 ? '+' . $xAxis : $xAxis;
+            $yAxis = $yAxis >= 0 ? '+' . $yAxis : $yAxis;
+
+            $cmd .= ' -gravity ' . escapeshellarg($gravity) . ' -geometry ' . escapeshellarg(""{$xAxis}{$yAxis}"");
+        }
+
+        // Color
+        if (isset($options['color'])) {
+            [$r, $g, $b] = sscanf(""#{$options['color']}"", '#%02x%02x%02x');
+
+            $cmd .= ' -fill ' . escapeshellarg(""rgba({$r},{$g},{$b},{$options['opacity']})"");
+        }
+
+        // Font Size - use points....
+        if (isset($options['fontSize'])) {
+            $cmd .= ' -pointsize ' . escapeshellarg((string) $options['fontSize']);
+        }
+
+        // Text
+        $cmd .= ' -annotate 0 ' . escapeshellarg($text);
+
+        $source      = ! empty($this->resource) ? $this->resource : $this->image()->getPathname();
+        $destination = $this->getResourcePath();
+
+        $cmd = ' ' . escapeshellarg($source) . ' ' . $cmd . ' ' . escapeshellarg($destination);
+
+        $this->process($cmd);
+    }"
+Command Injection,"    public function _resize(bool $maintainRatio = false)
+    {
+        $source      = ! empty($this->resource) ? $this->resource : $this->image()->getPathname();
+        $destination = $this->getResourcePath();
+
+        $escape = '\\';
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $escape = '';
+        }
+
+        $action = $maintainRatio
+            ? ' -resize ' . ($this->width ?? 0) . 'x' . ($this->height ?? 0) . ' ""' . $source . '"" ""' . $destination . '""'
+            : ' -resize ' . ($this->width ?? 0) . 'x' . ($this->height ?? 0) . ""{$escape}! \"""" . $source . '"" ""' . $destination . '""';
+
+        $this->process($action);
+
+        return $this;
+    }","    public function _resize(bool $maintainRatio = false)
+    {
+        $source      = ! empty($this->resource) ? $this->resource : $this->image()->getPathname();
+        $destination = $this->getResourcePath();
+
+        $escape = '\\';
+
+        if (PHP_OS_FAMILY === 'Windows') {
+            $escape = '';
+        }
+
+        $action = $maintainRatio
+            ? ' -resize ' . ($this->width ?? 0) . 'x' . ($this->height ?? 0) . ' ' . escapeshellarg($source) . ' ' . escapeshellarg($destination)
+            : ' -resize ' . ($this->width ?? 0) . 'x' . ($this->height ?? 0) . ""{$escape}! "" . escapeshellarg($source) . ' ' . escapeshellarg($destination);
+
+        $this->process($action);
+
+        return $this;
+    }"
+Code Injection,"    protected function hydrateForUpdate($raw, $path, $value, $context)
+    {
+        $meta = $this->getMetaForPath($raw, $path);
+
+        // If we have meta data already for this property, let's use that to get a synth...
+        if ($meta) {
+            return $this->hydrate([$value, $meta], $context, $path);
+        }
+
+        // If we don't, let's check to see if it's a typed property and fetch the synth that way...
+        $parent = str($path)->contains('.')
+            ? data_get($context->component, str($path)->beforeLast('.')->toString())
+            : $context->component;
+
+        $childKey = str($path)->afterLast('.');
+
+        if ($parent && is_object($parent) && property_exists($parent, $childKey) && Utils::propertyIsTyped($parent, $childKey)) {
+            $type = Utils::getProperty($parent, $childKey)->getType();
+
+            $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
+
+            foreach ($types as $type) {
+                $synth = $this->getSynthesizerByType($type->getName(), $context, $path);
+
+                if ($synth) return $synth->hydrateFromType($type->getName(), $value);
+            }
+        }
+
+        return $value;
+    }","    protected function hydrateForUpdate($raw, $path, $value, $context)
+    {
+        $meta = $this->getMetaForPath($raw, $path);
+
+        // If we have meta data already for this property, let's use that to get a synth...
+        if ($meta) {
+            return $this->hydratePropertyUpdate([$value, $meta], $context, $path, $raw);
+        }
+
+        // If we don't, let's check to see if it's a typed property and fetch the synth that way...
+        $parent = str($path)->contains('.')
+            ? data_get($context->component, str($path)->beforeLast('.')->toString())
+            : $context->component;
+
+        $childKey = str($path)->afterLast('.');
+
+        if ($parent && is_object($parent) && property_exists($parent, $childKey) && Utils::propertyIsTyped($parent, $childKey)) {
+            $type = Utils::getProperty($parent, $childKey)->getType();
+
+            $types = $type instanceof ReflectionUnionType ? $type->getTypes() : [$type];
+
+            foreach ($types as $type) {
+                $synth = $this->getSynthesizerByType($type->getName(), $context, $path);
+
+                if ($synth) return $synth->hydrateFromType($type->getName(), $value);
+            }
+        }
+
+        return $value;
+    }"
+Code Injection,"    public function __invoke(Request $request): JsonResponse
+    {
+        $locales = explode(' ', $request->input('locale') ?? '');
+        $namespaces = explode(' ', $request->input('namespace') ?? '');
+
+        $response = [];
+        foreach ($locales as $locale) {
+            $response[$locale] = [];
+            foreach ($namespaces as $namespace) {
+                $response[$locale][$namespace] = $this->i18n(
+                    $this->loader->load($locale, str_replace('.', '/', $namespace))
+                );
+            }
+        }
+
+        return new JsonResponse($response, 200, [
+            // Cache this in the browser for an hour, and allow the browser to use a stale
+            // cache for up to a day after it was created while it fetches an updated set
+            // of translation keys.
+            'Cache-Control' => 'public, max-age=3600, stale-while-revalidate=86400',
+            'ETag' => md5(json_encode($response, JSON_THROW_ON_ERROR)),
+        ]);
+    }","    public function __invoke(LocaleRequest $request): JsonResponse
+    {
+        $locale = $request->input('locale');
+        $namespace = $request->input('namespace');
+        $response[$locale][$namespace] = $this->i18n($this->loader->load($locale, $namespace));
+
+        return new JsonResponse($response, 200, [
+            // Cache this in the browser for an hour, and allow the browser to use a stale
+            // cache for up to a day after it was created while it fetches an updated set
+            // of translation keys.
+            'Cache-Control' => 'public, max-age=3600, stale-while-revalidate=86400',
+            'ETag' => md5(json_encode($response, JSON_THROW_ON_ERROR)),
+        ]);
+    }"
+Insecure Deserialization,"    public function run($args = [])
+    {
+        $rcmail = rcmail::get_instance();
+        $from   = rcube_utils::get_input_string('_from', rcube_utils::INPUT_GET);
+        $type   = preg_replace('/(add|edit)-/', '', $from);
+
+        // Plugins in Settings may use this file for some uploads (#5694)
+        // Make sure it does not contain a dot, which is a special character
+        // when using rcube_session::append() below
+        $type = str_replace('.', '-', $type);
+
+        // Supported image format types
+        $IMAGE_TYPES = explode(',', 'jpeg,jpg,jp2,tiff,tif,bmp,eps,gif,png,png8,png24,png32,svg,ico');
+
+        // clear all stored output properties (like scripts and env vars)
+        $rcmail->output->reset();
+
+        $max_size = $rcmail->config->get($type . '_image_size', 64) * 1024;
+        $uploadid = rcube_utils::get_input_string('_uploadid', rcube_utils::INPUT_GET);
+
+        if (!empty($_FILES['_file']['tmp_name']) && is_array($_FILES['_file']['tmp_name'])) {
+            $multiple = count($_FILES['_file']['tmp_name']) > 1;
+
+            foreach ($_FILES['_file']['tmp_name'] as $i => $filepath) {
+                $err        = $_FILES['_file']['error'][$i];
+                $imageprop  = null;
+                $attachment = null;
+
+                // Process uploaded attachment if there is no error
+                if (!$err) {
+                    if ($max_size < $_FILES['_file']['size'][$i]) {
+                        $err = 'size_error';
+                    }
+                    // check image file type
+                    else {
+                        $image     = new rcube_image($filepath);
+                        $imageprop = $image->props();
+
+                        if (!in_array(strtolower($imageprop['type']), $IMAGE_TYPES)) {
+                            $err = 'type_error';
+                        }
+                    }
+                }
+
+                // save uploaded image in storage backend
+                if (!empty($imageprop)) {
+                    $attachment = $rcmail->plugins->exec_hook('attachment_upload', [
+                        'path'     => $filepath,
+                        'size'     => $_FILES['_file']['size'][$i],
+                        'name'     => $_FILES['_file']['name'][$i],
+                        'mimetype' => 'image/' . $imageprop['type'],
+                        'group'    => $type,
+                    ]);
+                }
+
+                if (!$err && !empty($attachment['status']) && empty($attachment['abort'])) {
+                    $id = $attachment['id'];
+
+                    // store new file in session
+                    unset($attachment['status'], $attachment['abort']);
+                    $rcmail->session->append($type . '.files', $id, $attachment);
+
+                    $content = rcube::Q($attachment['name']);
+
+                    $rcmail->output->command('add2attachment_list', ""rcmfile$id"", [
+                            'html'      => $content,
+                            'name'      => $attachment['name'],
+                            'mimetype'  => $attachment['mimetype'],
+                            'classname' => rcube_utils::file2class($attachment['mimetype'], $attachment['name']),
+                            'complete'  => true
+                        ],
+                        $uploadid
+                    );
+                }
+                else {
+                    $error_label = null;
+                    if ($err == 'type_error') {
+                        $error_label = 'invalidimageformat';
+                    }
+                    else if ($err == 'size_error') {
+                        $error_label = ['name' => 'filesizeerror', 'vars' => ['size' => self::show_bytes($max_size)]];
+                    }
+
+                    self::upload_error($err, $attachment, $error_label);
+                }
+            }
+        }
+        else if (self::upload_failure()) {
+            $rcmail->output->command('remove_from_attachment_list', $uploadid);
+        }
+
+        $rcmail->output->send('iframe');
+    }","    public function run($args = [])
+    {
+        $rcmail = rcmail::get_instance();
+        $from   = rcube_utils::get_input_string('_from', rcube_utils::INPUT_GET);
+        $type   = preg_replace('/(add|edit)-/', '', $from);
+
+        // Validate URL input.
+        if (!rcube_utils::is_simple_string($type)) {
+            rcmail::write_log('errors', 'The URL parameter ""_from"" contains disallowed characters and the request is thus rejected.');
+            $rcmail->output->command('display_message', 'Invalid input', 'error');
+            $rcmail->output->send('iframe');
+        }
+
+        // Plugins in Settings may use this file for some uploads (#5694)
+        // Make sure it does not contain a dot, which is a special character
+        // when using rcube_session::append() below
+        $type = str_replace('.', '-', $type);
+
+        // Supported image format types
+        $IMAGE_TYPES = explode(',', 'jpeg,jpg,jp2,tiff,tif,bmp,eps,gif,png,png8,png24,png32,svg,ico');
+
+        // clear all stored output properties (like scripts and env vars)
+        $rcmail->output->reset();
+
+        $max_size = $rcmail->config->get($type . '_image_size', 64) * 1024;
+        $uploadid = rcube_utils::get_input_string('_uploadid', rcube_utils::INPUT_GET);
+
+        if (!empty($_FILES['_file']['tmp_name']) && is_array($_FILES['_file']['tmp_name'])) {
+            $multiple = count($_FILES['_file']['tmp_name']) > 1;
+
+            foreach ($_FILES['_file']['tmp_name'] as $i => $filepath) {
+                $err        = $_FILES['_file']['error'][$i];
+                $imageprop  = null;
+                $attachment = null;
+
+                // Process uploaded attachment if there is no error
+                if (!$err) {
+                    if ($max_size < $_FILES['_file']['size'][$i]) {
+                        $err = 'size_error';
+                    }
+                    // check image file type
+                    else {
+                        $image     = new rcube_image($filepath);
+                        $imageprop = $image->props();
+
+                        if (!in_array(strtolower($imageprop['type']), $IMAGE_TYPES)) {
+                            $err = 'type_error';
+                        }
+                    }
+                }
+
+                // save uploaded image in storage backend
+                if (!empty($imageprop)) {
+                    $attachment = $rcmail->plugins->exec_hook('attachment_upload', [
+                        'path'     => $filepath,
+                        'size'     => $_FILES['_file']['size'][$i],
+                        'name'     => $_FILES['_file']['name'][$i],
+                        'mimetype' => 'image/' . $imageprop['type'],
+                        'group'    => $type,
+                    ]);
+                }
+
+                if (!$err && !empty($attachment['status']) && empty($attachment['abort'])) {
+                    $id = $attachment['id'];
+
+                    // store new file in session
+                    unset($attachment['status'], $attachment['abort']);
+                    $rcmail->session->append($type . '.files', $id, $attachment);
+
+                    $content = rcube::Q($attachment['name']);
+
+                    $rcmail->output->command('add2attachment_list', ""rcmfile$id"", [
+                            'html'      => $content,
+                            'name'      => $attachment['name'],
+                            'mimetype'  => $attachment['mimetype'],
+                            'classname' => rcube_utils::file2class($attachment['mimetype'], $attachment['name']),
+                            'complete'  => true
+                        ],
+                        $uploadid
+                    );
+                }
+                else {
+                    $error_label = null;
+                    if ($err == 'type_error') {
+                        $error_label = 'invalidimageformat';
+                    }
+                    else if ($err == 'size_error') {
+                        $error_label = ['name' => 'filesizeerror', 'vars' => ['size' => self::show_bytes($max_size)]];
+                    }
+
+                    self::upload_error($err, $attachment, $error_label);
+                }
+            }
+        }
+        else if (self::upload_failure()) {
+            $rcmail->output->command('remove_from_attachment_list', $uploadid);
+        }
+
+        $rcmail->output->send('iframe');
+    }"
+Authentication Bypass,"    public function initRoutes($wiki)
+    {
+        $routes = new RouteCollection();
+
+        $loader = new AnnotationDirectoryLoader(
+            new FileLocator(__DIR__ . '/../'),
+            new AnnotatedRouteControllerLoader(
+                new AnnotationReader()
+            )
+        );
+
+        // Core controllers
+        $routes->addCollection($loader->load('includes/controllers'));
+
+        foreach ($wiki->extensions as $extensionKey => $extensionPath) {
+            $controllersDir = \getcwd() . '/' . $extensionPath . 'controllers';
+            if (is_dir($controllersDir)) {
+                $routes->addCollection($loader->load($controllersDir));
+            }
+        }
+
+        return $routes;
+    }","    public function initRoutes($wiki)
+    {
+        $routes = new RouteCollection();
+
+        $loader = new AnnotationDirectoryLoader(
+            new FileLocator(__DIR__ . '/../'),
+            new AnnotatedRouteControllerLoader(
+                new AnnotationReader()
+            )
+        );
+        // Core controllers
+        $routes->addCollection($loader->load('includes/controllers'));
+
+        foreach ($wiki->extensions as $extensionKey => $extensionPath) {
+            $controllersDir = \getcwd() . '/' . $extensionPath . 'controllers';
+            if (is_dir($controllersDir)) {
+                $routes->addCollection($loader->load($controllersDir));
+            }
+        }
+
+        return $routes;
+    }
+"
+Authentication Bypass,"<?php
+
+namespace YesWiki\Templates\Controller;
+
+use Symfony\Component\Routing\Annotation\Route;
+use YesWiki\Core\ApiResponse;
+use YesWiki\Core\Service\ThemeManager;
+use YesWiki\Core\YesWikiController;
+
+class ApiController extends YesWikiController
+{
+    /**
+     * @Route(""/api/templates/custom-presets/{presetFilename}"", methods={""DELETE""},options={""acl"":{""public"",""@admins""}})
+     */
+    public function deleteCustomCSSPreset($presetFilename)
+    {
+        $result = $this->getService(ThemeManager::class)->deleteCustomCSSPreset($presetFilename);
+        $code = ($result['status'])
+            ? 200 // 'OK'
+            : 400; // 'not OK
+
+        return new ApiResponse(['code' => $code, 'message' => $result['message']], $code);
+    }
+
+    /**
+     * @Route(""/api/templates/custom-presets/{presetFilename}"", methods={""POST""},options={""acl"":{""public"",""+""}})
+     */
+    public function addCustomCSSPreset($presetFilename)
+    {
+        $result = $this->getService(ThemeManager::class)->addCustomCSSPreset($presetFilename, $_POST);
+        $code = ($result['status'])
+            ? 200 // 'OK'
+            : (
+                (in_array($result['errorCode'], [3, 4]))
+                    ? 500 // server error
+                    : 400 // bad request error
+            ); // 'not OK
+
+        return new ApiResponse(['code' => $code, 'message' => $result['message'], 'errorCode' => $result['errorCode']], $code);
+    }
+
+    /**
+     * Display Auth api documentation.
+     *
+     * @return string
+     */
+    public function getDocumentation()
+    {
+        $output = '<h2>Extension Templates</h2>' . ""\n"";
+
+        $output .= '
+        <p>
+        <b><code>POST ' . $this->wiki->href('', 'api/templates/custom-presets/{presetFilename}') . '</code></b><br />
+        ' . _t('TEMPLATE_ADD_CSS_PRESET_API_HINT') . '.
+        </p>';
+
+        $output .= '
+        <p>
+        <b><code>DELETE ' . $this->wiki->href('', 'api/templates/custom-presets/{presetFilename}') . '</code></b><br />
+        ' . _t('TEMPLATE_DELETE_CSS_PRESET_API_HINT') . '.
+        </p>';
+
+        return $output;
+    }
+}
+","<?php
+
+namespace YesWiki\Templates\Controller;
+
+use Symfony\Component\Routing\Annotation\Route;
+use YesWiki\Core\ApiResponse;
+use YesWiki\Core\Service\ThemeManager;
+use YesWiki\Core\YesWikiController;
+
+class ApiController extends YesWikiController
+{
+    /**
+     * @Route(""/api/templates/custom-presets/{presetFilename}"", methods={""DELETE""},options={""acl"":{""@admins""}})
+     */
+    public function deleteCustomCSSPreset($presetFilename)
+    {
+        $result = $this->getService(ThemeManager::class)->deleteCustomCSSPreset($presetFilename);
+        $code = ($result['status'])
+            ? 200 // 'OK'
+            : 400; // 'not OK
+
+        return new ApiResponse(['code' => $code, 'message' => $result['message']], $code);
+    }
+
+    /**
+     * @Route(""/api/templates/custom-presets/{presetFilename}"", methods={""POST""},options={""acl"":{""+""}})
+     */
+    public function addCustomCSSPreset($presetFilename)
+    {
+        $result = $this->getService(ThemeManager::class)->addCustomCSSPreset($presetFilename, $_POST);
+        $code = ($result['status'])
+            ? 200 // 'OK'
+            : (
+                (in_array($result['errorCode'], [3, 4]))
+                    ? 500 // server error
+                    : 400 // bad request error
+            ); // 'not OK
+
+        return new ApiResponse(['code' => $code, 'message' => $result['message'], 'errorCode' => $result['errorCode']], $code);
+    }
+
+    /**
+     * Display Auth api documentation.
+     *
+     * @return string
+     */
+    public function getDocumentation()
+    {
+        $output = '<h2>Extension Templates</h2>' . ""\n"";
+
+        $output .= '
+        <p>
+        <b><code>POST ' . $this->wiki->href('', 'api/templates/custom-presets/{presetFilename}') . '</code></b><br />
+        ' . _t('TEMPLATE_ADD_CSS_PRESET_API_HINT') . '.
+        </p>';
+
+        $output .= '
+        <p>
+        <b><code>DELETE ' . $this->wiki->href('', 'api/templates/custom-presets/{presetFilename}') . '</code></b><br />
+        ' . _t('TEMPLATE_DELETE_CSS_PRESET_API_HINT') . '.
+        </p>';
+
+        return $output;
+    }
+}
+"
+Buffer Overflow,"int ossl_punycode_decode(const char *pEncoded, const size_t enc_len,
+                         unsigned int *pDecoded, unsigned int *pout_length)
+{
+    unsigned int n = initial_n;
+    unsigned int i = 0;
+    unsigned int bias = initial_bias;
+    size_t processed_in = 0, written_out = 0;
+    unsigned int max_out = *pout_length;
+
+    unsigned int basic_count = 0;
+    unsigned int loop;
+
+    for (loop = 0; loop < enc_len; loop++) {
+        if (pEncoded[loop] == delimiter)
+            basic_count = loop;
+    }
+
+    if (basic_count > 0) {
+        if (basic_count > max_out)
+            return 0;
+
+        for (loop = 0; loop < basic_count; loop++) {
+            if (is_basic(pEncoded[loop]) == 0)
+                return 0;
+
+            pDecoded[loop] = pEncoded[loop];
+            written_out++;
+        }
+        processed_in = basic_count + 1;
+    }
+
+    for (loop = processed_in; loop < enc_len;) {
+        unsigned int oldi = i;
+        unsigned int w = 1;
+        unsigned int k, t;
+        int digit;
+
+        for (k = base;; k += base) {
+            if (loop >= enc_len)
+                return 0;
+
+            digit = digit_decoded(pEncoded[loop]);
+            loop++;
+
+            if (digit < 0)
+                return 0;
+            if ((unsigned int)digit > (maxint - i) / w)
+                return 0;
+
+            i = i + digit * w;
+            t = (k <= bias) ? tmin : (k >= bias + tmax) ? tmax : k - bias;
+
+            if ((unsigned int)digit < t)
+                break;
+
+            if (w > maxint / (base - t))
+                return 0;
+            w = w * (base - t);
+        }
+
+        bias = adapt(i - oldi, written_out + 1, (oldi == 0));
+        if (i / (written_out + 1) > maxint - n)
+            return 0;
+        n = n + i / (written_out + 1);
+        i %= (written_out + 1);
+
+        if (written_out >= max_out)
+            return 0;
+
+        memmove(pDecoded + i + 1, pDecoded + i,
+                (written_out - i) * sizeof *pDecoded);
+        pDecoded[i] = n;
+        i++;
+        written_out++;
+    }
+
+    *pout_length = written_out;
+    return 1;
+}","int ossl_punycode_decode(const char *pEncoded, const size_t enc_len,
+                         unsigned int *pDecoded, unsigned int *pout_length)
+{
+    unsigned int n = initial_n;
+    unsigned int i = 0;
+    unsigned int bias = initial_bias;
+    size_t processed_in = 0, written_out = 0;
+    unsigned int max_out = *pout_length;
+    unsigned int basic_count = 0;
+    unsigned int loop;
+
+    for (loop = 0; loop < enc_len; loop++) {
+        if (pEncoded[loop] == delimiter)
+            basic_count = loop;
+    }
+
+    if (basic_count > 0) {
+        if (basic_count > max_out)
+            return 0;
+
+        for (loop = 0; loop < basic_count; loop++) {
+            if (is_basic(pEncoded[loop]) == 0)
+                return 0;
+
+            pDecoded[loop] = pEncoded[loop];
+            written_out++;
+        }
+        processed_in = basic_count + 1;
+    }
+
+    for (loop = processed_in; loop < enc_len;) {
+        unsigned int oldi = i;
+        unsigned int w = 1;
+        unsigned int k, t;
+        int digit;
+
+        for (k = base;; k += base) {
+            if (loop >= enc_len)
+                return 0;
+
+            digit = digit_decoded(pEncoded[loop]);
+            loop++;
+
+            if (digit < 0)
+                return 0;
+            if ((unsigned int)digit > (maxint - i) / w)
+                return 0;
+
+            i = i + digit * w;
+            t = (k <= bias) ? tmin : (k >= bias + tmax) ? tmax : k - bias;
+
+            if ((unsigned int)digit < t)
+                break;
+
+            if (w > maxint / (base - t))
+                return 0;
+            w = w * (base - t);
+        }
+
+        bias = adapt(i - oldi, written_out + 1, (oldi == 0));
+        if (i / (written_out + 1) > maxint - n)
+            return 0;
+        n = n + i / (written_out + 1);
+        i %= (written_out + 1);
+
+        if (written_out >= max_out)
+            return 0;
+
+        memmove(pDecoded + i + 1, pDecoded + i,
+                (written_out - i) * sizeof(*pDecoded));
+        pDecoded[i] = n;
+        i++;
+        written_out++;
+    }
+
+    *pout_length = written_out;
+    return 1;
+}"
+Buffer Overflow,"int ossl_a2ucompare(const char *a, const char *u)
+{
+    char a_ulabel[LABEL_BUF_SIZE];
+    size_t a_size = sizeof(a_ulabel);
+
+    if (ossl_a2ulabel(a, a_ulabel, &a_size) <= 0) {
+        return -1;
+    }
+
+    return (strcmp(a_ulabel, u) == 0) ? 0 : 1;
+}","int ossl_a2ucompare(const char *a, const char *u)
+{
+    char a_ulabel[LABEL_BUF_SIZE + 1];
+    size_t a_size = sizeof(a_ulabel);
+
+    if (ossl_a2ulabel(a, a_ulabel, &a_size) <= 0)
+        return -1;
+
+    return strcmp(a_ulabel, u) != 0;
+}"
+Integer Overflow,"  virtual void* allocate(size_t size, size_t alignment = kDefaultAlignment) {
+    if (!isPowerOf2(alignment)) {
+      ET_LOG(Error, ""Alignment %zu is not a power of 2"", alignment);
+      return nullptr;
+    }
+
+    // The allocation will occupy [start, end), where the start is the next
+    // position that's a multiple of alignment.
+    uint8_t* start = alignPointer(cur_, alignment);
+    uint8_t* end = start + size;
+
+    // If the end of this allocation exceeds the end of this allocator, print
+    // error messages and return nullptr
+    if (end > end_) {
+      ET_LOG(
+          Error,
+          ""Memory allocation failed: %zuB requested (adjusted for alignment), %zuB available"",
+          static_cast<size_t>(end - cur_),
+          static_cast<size_t>(end_ - cur_));
+      return nullptr;
+    }
+
+    // Otherwise, record how many bytes were used, advance cur_ to the new end,
+    // and then return start. Note that the number of bytes used is (end - cur_)
+    // instead of (end - start) because start > cur_ if there is a misalignment
+    EXECUTORCH_TRACK_ALLOCATION(prof_id_, end - cur_);
+    cur_ = end;
+    return static_cast<void*>(start);
+  }","  virtual void* allocate(size_t size, size_t alignment = kDefaultAlignment) {
+    if (!isPowerOf2(alignment)) {
+      ET_LOG(Error, ""Alignment %zu is not a power of 2"", alignment);
+      return nullptr;
+    }
+
+    // The allocation will occupy [start, end), where the start is the next
+    // position that's a multiple of alignment.
+    uint8_t* start = alignPointer(cur_, alignment);
+    uint8_t* end = start + size;
+
+    // If the end of this allocation exceeds the end of this allocator, print
+    // error messages and return nullptr
+    if (end > end_ || end < start) {
+      ET_LOG(
+          Error,
+          ""Memory allocation failed: %zuB requested (adjusted for alignment), %zuB available"",
+          static_cast<size_t>(end - cur_),
+          static_cast<size_t>(end_ - cur_));
+      return nullptr;
+    }
+
+    // Otherwise, record how many bytes were used, advance cur_ to the new end,
+    // and then return start. Note that the number of bytes used is (end - cur_)
+    // instead of (end - start) because start > cur_ if there is a misalignment
+    EXECUTORCH_TRACK_ALLOCATION(prof_id_, end - cur_);
+    cur_ = end;
+    return static_cast<void*>(start);
+  }"
+Heap Overflow,"void et_copy_index(KernelRuntimeContext& context, EValue** stack) {
+  (void)context;
+  SizesType expected_output_size[kTensorDimensionLimit];
+
+  auto copy_to = (*stack[0]).toTensor();
+  auto copy_from = (*stack[1]).toTensor();
+  auto index = (*stack[2]).toInt();
+
+  // Number of bytes we need to copy over from copy_from tensor.
+  size_t size_copy_from = (copy_from.element_size()) * (copy_from.numel());
+
+  ET_CHECK_MSG(
+      (copy_to.sizes().size() - copy_from.sizes().size()) == 1,
+      ""Ranks of copy_to  and copy_from tensor should only differ by 1."");
+
+  // Here we calculate the size of the out_tensor after copy_from has
+  // been copied to it. This will be passed onto the resize call.
+  expected_output_size[0] = index + 1;
+  for (size_t i = 0; i < copy_from.sizes().size(); i++) {
+    // If we're copying past the first index then the shape of
+    // copy_from and copy_to without the leading dimension should be
+    // the same. i.e. copy_to.size[1:] == copy_from.size[:].
+    if (index > 0) {
+      ET_CHECK_MSG(
+          copy_to.sizes()[i + 1] == copy_from.sizes()[i],
+          ""Mismatch in shape between copy_to and copy_from tensors"");
+    }
+    expected_output_size[i + 1] = copy_from.sizes()[i];
+  }
+
+  if (copy_to.sizes()[0] < expected_output_size[0]) {
+    // Resize `copy_to` to the expected output size.
+    const void* data_ptr = copy_to.const_data_ptr();
+    Error err =
+        resize_tensor(copy_to, {expected_output_size, copy_to.sizes().size()});
+    ET_CHECK(err == Error::Ok);
+    ET_CHECK_MSG(
+        data_ptr == copy_to.const_data_ptr(),
+        ""Data ptr of copy_to tensor changed after resize which isn't allowed for static/upper-bounded tensors"");
+  }
+
+  auto copy_to_ptr = copy_to.const_data_ptr();
+  auto copy_from_ptr = copy_from.const_data_ptr();
+
+  // If we've reached here, it means the copy_to tensor has been
+  // successfully resized so we can now copy over the data from
+  // copy_from into the copy_to tensor.
+  memcpy(
+      (void*)((uintptr_t)copy_to_ptr + index * size_copy_from),
+      copy_from_ptr,
+      size_copy_from);
+}","void et_copy_index(KernelRuntimeContext& context, EValue** stack) {
+  (void)context;
+  SizesType expected_output_size[kTensorDimensionLimit];
+
+  auto copy_to = (*stack[0]).toTensor();
+  auto copy_from = (*stack[1]).toTensor();
+  auto index = (*stack[2]).toInt();
+
+  // Number of bytes we need to copy over from copy_from tensor.
+  size_t size_copy_from = (copy_from.element_size()) * (copy_from.numel());
+
+  ET_CHECK_MSG(
+      (copy_to.sizes().size() - copy_from.sizes().size()) == 1,
+      ""Ranks of copy_to  and copy_from tensor should only differ by 1."");
+
+  // Here we calculate the size of the out_tensor after copy_from has
+  // been copied to it. This will be passed onto the resize call.
+  expected_output_size[0] = index + 1;
+  for (size_t i = 0; i < copy_from.sizes().size(); i++) {
+    // If we're copying past the first index then the shape of
+    // copy_from and copy_to without the leading dimension should be
+    // the same. i.e. copy_to.size[1:] == copy_from.size[:].
+    ET_CHECK_MSG(
+        copy_to.sizes()[i + 1] == copy_from.sizes()[i],
+        ""Mismatch in shape between copy_to and copy_from tensors"");
+    expected_output_size[i + 1] = copy_from.sizes()[i];
+  }
+
+  if (copy_to.sizes()[0] < expected_output_size[0]) {
+    // Resize `copy_to` to the expected output size.
+    const void* data_ptr = copy_to.const_data_ptr();
+    Error err =
+        resize_tensor(copy_to, {expected_output_size, copy_to.sizes().size()});
+    ET_CHECK(err == Error::Ok);
+    ET_CHECK_MSG(
+        data_ptr == copy_to.const_data_ptr(),
+        ""Data ptr of copy_to tensor changed after resize which isn't allowed for static/upper-bounded tensors"");
+  }
+
+  auto copy_to_ptr = copy_to.const_data_ptr();
+  auto copy_from_ptr = copy_from.const_data_ptr();
+
+  // If we've reached here, it means the copy_to tensor has been
+  // successfully resized so we can now copy over the data from
+  // copy_from into the copy_to tensor.
+
+  // Check that the destination has enough space for the copy.
+  size_t offset = index * size_copy_from;
+  size_t copy_to_size = copy_to.element_size() * copy_to.numel();
+  ET_CHECK_MSG(
+      offset + size_copy_from <= copy_to_size,
+      ""Buffer overflow: copy_to tensor is smaller than copy_from tensor."");
+
+  memcpy(
+      // NOLINTNEXTLINE(performance-no-int-to-ptr)
+      (void*)((uintptr_t)copy_to_ptr + offset),
+      copy_from_ptr,
+      size_copy_from);
+}"
+SQL Injection,"    def add_filtered_relation(self, filtered_relation, alias):
+        self.check_alias(alias)
+        filtered_relation.alias = alias
+        relation_lookup_parts, relation_field_parts, _ = self.solve_lookup_type(
+            filtered_relation.relation_name
+        )
+        if relation_lookup_parts:
+            raise ValueError(
+                ""FilteredRelation's relation_name cannot contain lookups ""
+                ""(got %r)."" % filtered_relation.relation_name
+            )
+        for lookup in get_children_from_q(filtered_relation.condition):
+            lookup_parts, lookup_field_parts, _ = self.solve_lookup_type(lookup)
+            shift = 2 if not lookup_parts else 1
+            lookup_field_path = lookup_field_parts[:-shift]
+            for idx, lookup_field_part in enumerate(lookup_field_path):
+                if len(relation_field_parts) > idx:
+                    if relation_field_parts[idx] != lookup_field_part:
+                        raise ValueError(
+                            ""FilteredRelation's condition doesn't support ""
+                            ""relations outside the %r (got %r).""
+                            % (filtered_relation.relation_name, lookup)
+                        )
+            if len(lookup_field_parts) > len(relation_field_parts) + 1:
+                raise ValueError(
+                    ""FilteredRelation's condition doesn't support nested ""
+                    ""relations deeper than the relation_name (got %r for ""
+                    ""%r)."" % (lookup, filtered_relation.relation_name)
+                )
+        filtered_relation = filtered_relation.clone()
+        filtered_relation.condition = rename_prefix_from_q(
+            filtered_relation.relation_name,
+            alias,
+            filtered_relation.condition,
+        )
+        self._filtered_relations[filtered_relation.alias] = filtered_relation","    def add_filtered_relation(self, filtered_relation, alias):
+        if ""."" in alias:
+            raise ValueError(
+                ""FilteredRelation doesn't support aliases with periods ""
+                ""(got %r)."" % alias
+            )
+        self.check_alias(alias)
+        filtered_relation.alias = alias
+        relation_lookup_parts, relation_field_parts, _ = self.solve_lookup_type(
+            filtered_relation.relation_name
+        )
+        if relation_lookup_parts:
+            raise ValueError(
+                ""FilteredRelation's relation_name cannot contain lookups ""
+                ""(got %r)."" % filtered_relation.relation_name
+            )
+        for lookup in get_children_from_q(filtered_relation.condition):
+            lookup_parts, lookup_field_parts, _ = self.solve_lookup_type(lookup)
+            shift = 2 if not lookup_parts else 1
+            lookup_field_path = lookup_field_parts[:-shift]
+            for idx, lookup_field_part in enumerate(lookup_field_path):
+                if len(relation_field_parts) > idx:
+                    if relation_field_parts[idx] != lookup_field_part:
+                        raise ValueError(
+                            ""FilteredRelation's condition doesn't support ""
+                            ""relations outside the %r (got %r).""
+                            % (filtered_relation.relation_name, lookup)
+                        )
+            if len(lookup_field_parts) > len(relation_field_parts) + 1:
+                raise ValueError(
+                    ""FilteredRelation's condition doesn't support nested ""
+                    ""relations deeper than the relation_name (got %r for ""
+                    ""%r)."" % (lookup, filtered_relation.relation_name)
+                )
+        filtered_relation = filtered_relation.clone()
+        filtered_relation.condition = rename_prefix_from_q(
+            filtered_relation.relation_name,
+            alias,
+            filtered_relation.condition,
+        )
+        self._filtered_relations[filtered_relation.alias] = filtered_relation"
+SQL Injection,"    def check_raster(self, lookup, template_params):
+        spheroid = lookup.rhs_params and lookup.rhs_params[-1] == ""spheroid""
+
+        # Check which input is a raster.
+        lhs_is_raster = lookup.lhs.field.geom_type == ""RASTER""
+        rhs_is_raster = isinstance(lookup.rhs, GDALRaster)
+
+        # Look for band indices and inject them if provided.
+        if lookup.band_lhs is not None and lhs_is_raster:
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""lhs""] = ""%s, %s"" % (
+                template_params[""lhs""],
+                lookup.band_lhs,
+            )
+
+        if lookup.band_rhs is not None and rhs_is_raster:
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""rhs""] = ""%s, %s"" % (
+                template_params[""rhs""],
+                lookup.band_rhs,
+            )
+
+        # Convert rasters to polygons if necessary.
+        if not self.raster or spheroid:
+            # Operators without raster support.
+            if lhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            if rhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+        elif self.raster == BILATERAL:
+            # Operators with raster support but don't support mixed (rast-geom)
+            # lookups.
+            if lhs_is_raster and not rhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            elif rhs_is_raster and not lhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+
+        return template_params","    def check_raster(self, lookup, template_params):
+        spheroid = lookup.rhs_params and lookup.rhs_params[-1] == ""spheroid""
+
+        # Check which input is a raster.
+        lhs_is_raster = lookup.lhs.field.geom_type == ""RASTER""
+        rhs_is_raster = isinstance(lookup.rhs, GDALRaster)
+
+        # Look for band indices and inject them if provided.
+        if lookup.band_lhs is not None and lhs_is_raster:
+            if not isinstance(lookup.band_lhs, int):
+                name = lookup.band_lhs.__class__.__name__
+                raise TypeError(f""Band index must be an integer, but got {name!r}."")
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""lhs""] = ""%s, %s"" % (
+                template_params[""lhs""],
+                lookup.band_lhs,
+            )
+
+        if lookup.band_rhs is not None and rhs_is_raster:
+            if not isinstance(lookup.band_rhs, int):
+                name = lookup.band_rhs.__class__.__name__
+                raise TypeError(f""Band index must be an integer, but got {name!r}."")
+            if not self.func:
+                raise ValueError(
+                    ""Band indices are not allowed for this operator, it works on bbox ""
+                    ""only.""
+                )
+            template_params[""rhs""] = ""%s, %s"" % (
+                template_params[""rhs""],
+                lookup.band_rhs,
+            )
+
+        # Convert rasters to polygons if necessary.
+        if not self.raster or spheroid:
+            # Operators without raster support.
+            if lhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            if rhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+        elif self.raster == BILATERAL:
+            # Operators with raster support but don't support mixed (rast-geom)
+            # lookups.
+            if lhs_is_raster and not rhs_is_raster:
+                template_params[""lhs""] = ""ST_Polygon(%s)"" % template_params[""lhs""]
+            elif rhs_is_raster and not lhs_is_raster:
+                template_params[""rhs""] = ""ST_Polygon(%s)"" % template_params[""rhs""]
+
+        return template_params"
+SQL Injection,"def _write_postgis(
+    gdf,
+    name,
+    con,
+    schema=None,
+    if_exists=""fail"",
+    index=False,
+    index_label=None,
+    chunksize=None,
+    dtype=None,
+):
+    """"""
+    Upload GeoDataFrame into PostGIS database.
+
+    This method requires SQLAlchemy and GeoAlchemy2, and a PostgreSQL
+    Python driver (e.g. psycopg2) to be installed.
+
+    Parameters
+    ----------
+    name : str
+        Name of the target table.
+    con : sqlalchemy.engine.Connection or sqlalchemy.engine.Engine
+        Active connection to the PostGIS database.
+    if_exists : {'fail', 'replace', 'append'}, default 'fail'
+        How to behave if the table already exists:
+
+        - fail: Raise a ValueError.
+        - replace: Drop the table before inserting new values.
+        - append: Insert new values to the existing table.
+    schema : string, optional
+        Specify the schema. If None, use default schema: 'public'.
+    index : bool, default True
+        Write DataFrame index as a column.
+        Uses *index_label* as the column name in the table.
+    index_label : string or sequence, default None
+        Column label for index column(s).
+        If None is given (default) and index is True,
+        then the index names are used.
+    chunksize : int, optional
+        Rows will be written in batches of this size at a time.
+        By default, all rows will be written at once.
+    dtype : dict of column name to SQL type, default None
+        Specifying the datatype for columns.
+        The keys should be the column names and the values
+        should be the SQLAlchemy types.
+
+    Examples
+    --------
+    >>> from sqlalchemy import create_engine  # doctest: +SKIP
+    >>> engine = create_engine(""postgresql://myusername:mypassword@myhost:5432\
+/mydatabase"";)  # doctest: +SKIP
+    >>> gdf.to_postgis(""my_table"", engine)  # doctest: +SKIP
+    """"""
+    try:
+        from geoalchemy2 import Geometry
+        from sqlalchemy import text
+    except ImportError:
+        raise ImportError(""'to_postgis()' requires geoalchemy2 package."")
+
+    gdf = gdf.copy()
+    geom_name = gdf.geometry.name
+
+    # Get srid
+    srid = _get_srid_from_crs(gdf)
+
+    # Get geometry type and info whether data contains LinearRing.
+    geometry_type, has_curve = _get_geometry_type(gdf)
+
+    # Build dtype with Geometry
+    if dtype is not None:
+        dtype[geom_name] = Geometry(geometry_type=geometry_type, srid=srid)
+    else:
+        dtype = {geom_name: Geometry(geometry_type=geometry_type, srid=srid)}
+
+    # Convert LinearRing geometries to LineString
+    if has_curve:
+        gdf = _convert_linearring_to_linestring(gdf, geom_name)
+
+    # Convert geometries to EWKB
+    gdf = _convert_to_ewkb(gdf, geom_name, srid)
+
+    if schema is not None:
+        schema_name = schema
+    else:
+        schema_name = ""public""
+
+    if if_exists == ""append"":
+        # Check that the geometry srid matches with the current GeoDataFrame
+        with _get_conn(con) as connection:
+            # Only check SRID if table exists
+            if connection.dialect.has_table(connection, name, schema):
+                target_srid = connection.execute(
+                    text(f""SELECT Find_SRID('{schema_name}', '{name}', '{geom_name}');"")
+                ).fetchone()[0]
+
+                if target_srid != srid:
+                    msg = (
+                        f""The CRS of the target table (EPSG:{target_srid}) differs ""
+                        f""from the CRS of current GeoDataFrame (EPSG:{srid}).""
+                    )
+                    raise ValueError(msg)
+
+    with _get_conn(con) as connection:
+        gdf.to_sql(
+            name,
+            connection,
+            schema=schema_name,
+            if_exists=if_exists,
+            index=index,
+            index_label=index_label,
+            chunksize=chunksize,
+            dtype=dtype,
+            method=_psql_insert_copy,
+        )","def _write_postgis(
+    gdf,
+    name,
+    con,
+    schema=None,
+    if_exists=""fail"",
+    index=False,
+    index_label=None,
+    chunksize=None,
+    dtype=None,
+):
+    """"""
+    Upload GeoDataFrame into PostGIS database.
+
+    This method requires SQLAlchemy and GeoAlchemy2, and a PostgreSQL
+    Python driver (e.g. psycopg2) to be installed.
+
+    Parameters
+    ----------
+    name : str
+        Name of the target table.
+    con : sqlalchemy.engine.Connection or sqlalchemy.engine.Engine
+        Active connection to the PostGIS database.
+    if_exists : {'fail', 'replace', 'append'}, default 'fail'
+        How to behave if the table already exists:
+
+        - fail: Raise a ValueError.
+        - replace: Drop the table before inserting new values.
+        - append: Insert new values to the existing table.
+    schema : string, optional
+        Specify the schema. If None, use default schema: 'public'.
+    index : bool, default True
+        Write DataFrame index as a column.
+        Uses *index_label* as the column name in the table.
+    index_label : string or sequence, default None
+        Column label for index column(s).
+        If None is given (default) and index is True,
+        then the index names are used.
+    chunksize : int, optional
+        Rows will be written in batches of this size at a time.
+        By default, all rows will be written at once.
+    dtype : dict of column name to SQL type, default None
+        Specifying the datatype for columns.
+        The keys should be the column names and the values
+        should be the SQLAlchemy types.
+
+    Examples
+    --------
+    >>> from sqlalchemy import create_engine  # doctest: +SKIP
+    >>> engine = create_engine(""postgresql://myusername:mypassword@myhost:5432\
+/mydatabase"";)  # doctest: +SKIP
+    >>> gdf.to_postgis(""my_table"", engine)  # doctest: +SKIP
+    """"""
+    try:
+        from geoalchemy2 import Geometry
+        from sqlalchemy import text
+    except ImportError:
+        raise ImportError(""'to_postgis()' requires geoalchemy2 package."")
+
+    gdf = gdf.copy()
+    geom_name = gdf.geometry.name
+
+    # Get srid
+    srid = _get_srid_from_crs(gdf)
+
+    # Get geometry type and info whether data contains LinearRing.
+    geometry_type, has_curve = _get_geometry_type(gdf)
+
+    # Build dtype with Geometry
+    if dtype is not None:
+        dtype[geom_name] = Geometry(geometry_type=geometry_type, srid=srid)
+    else:
+        dtype = {geom_name: Geometry(geometry_type=geometry_type, srid=srid)}
+
+    # Convert LinearRing geometries to LineString
+    if has_curve:
+        gdf = _convert_linearring_to_linestring(gdf, geom_name)
+
+    # Convert geometries to EWKB
+    gdf = _convert_to_ewkb(gdf, geom_name, srid)
+
+    if schema is not None:
+        schema_name = schema
+    else:
+        schema_name = ""public""
+
+    if if_exists == ""append"":
+        # Check that the geometry srid matches with the current GeoDataFrame
+        with _get_conn(con) as connection:
+            # Only check SRID if table exists
+            if connection.dialect.has_table(connection, name, schema):
+                target_srid = connection.execute(
+                    text(
+                        ""SELECT Find_SRID(:schema_name, :name, :geom_name);""
+                    ).bindparams(
+                        schema_name=schema_name, name=name, geom_name=geom_name
+                    )
+                ).fetchone()[0]
+
+                if target_srid != srid:
+                    msg = (
+                        f""The CRS of the target table (EPSG:{target_srid}) differs ""
+                        f""from the CRS of current GeoDataFrame (EPSG:{srid}).""
+                    )
+                    raise ValueError(msg)
+
+    with _get_conn(con) as connection:
+        gdf.to_sql(
+            name,
+            connection,
+            schema=schema_name,
+            if_exists=if_exists,
+            index=index,
+            index_label=index_label,
+            chunksize=chunksize,
+            dtype=dtype,
+            method=_psql_insert_copy,
+        )"
+Command Injection,"def find_file(file_path: str, args: str = """", ctf=None) -> str:
+    """"""
+    Find a file in the filesystem.
+    """"""
+    command = f'find {file_path} {args}'
+    return run_command(command, ctf=ctf)","def find_file(file_path: str, args: str = """", ctf=None) -> str:
+    """"""
+    Find a file in the filesystem.
+    """"""
+    # Block dangerous flags that enable RCE, file writes, or deletion
+    for flag in DANGEROUS_FIND_FLAGS:
+        if flag in args:
+            return f""Error: DANGEROUS flag '{flag}' is not allowed""
+    
+    command = f'find {file_path} {args}'
+    return run_command(command, ctf=ctf)"
+Path Traversal,"    def _attachment_file_name(self) -> str:
+        """"""The original name of the attached file, no path.
+
+        This value is 'unknown' if it is not present in the MSG file (not expected).
+        """"""
+        return self._attachment.file_name or ""unknown""","    def _attachment_file_name(self) -> str:
+        """"""The original name of the attached file, no path.
+
+        This value is 'unknown' if it is not present in the MSG file (not expected).
+        The filename is sanitized to prevent path traversal attacks.
+        """"""
+        raw_filename = self._attachment.file_name or ""unknown""
+
+        # Sanitize the filename to prevent path traversal attacks
+        # Remove any path components for both Unix and Windows paths
+        # Use both separators to handle cross-platform attacks
+        safe_filename = os.path.basename(raw_filename.replace(""\\"", ""/""))
+
+        # Remove null bytes and other control characters
+        safe_filename = safe_filename.replace(""\0"", """")
+
+        # If the filename becomes empty after sanitization, use a default
+        if not safe_filename or safe_filename in (""."", ""..""):
+            safe_filename = ""unknown""
+
+        return safe_filename"
+SSRF,"async def download_item(
+    item: FileUrl,
+    data_format: Literal['bytes', 'base64', 'base64_uri', 'text'] = 'bytes',
+    type_format: Literal['mime', 'extension'] = 'mime',
+) -> DownloadedItem[str] | DownloadedItem[bytes]:
+    """"""Download an item by URL and return the content as a bytes object or a (base64-encoded) string.
+
+    Args:
+        item: The item to download.
+        data_format: The format to return the content in:
+            - `bytes`: The raw bytes of the content.
+            - `base64`: The base64-encoded content.
+            - `base64_uri`: The base64-encoded content as a data URI.
+            - `text`: The content as a string.
+        type_format: The format to return the media type in:
+            - `mime`: The media type as a MIME type.
+            - `extension`: The media type as an extension.
+
+    Raises:
+        UserError: If the URL points to a YouTube video or its protocol is gs://.
+    """"""
+    if item.url.startswith('gs://'):
+        raise UserError('Downloading from protocol ""gs://"" is not supported.')
+    elif item.url.startswith('s3://'):
+        raise UserError('Downloading from protocol ""s3://"" is not supported.')
+    elif isinstance(item, VideoUrl) and item.is_youtube:
+        raise UserError('Downloading YouTube videos is not supported.')
+
+    client = cached_async_http_client()
+    response = await client.get(item.url, follow_redirects=True)
+    response.raise_for_status()
+
+    if content_type := response.headers.get('content-type'):
+        content_type = content_type.split(';')[0]
+        if content_type == 'application/octet-stream':
+            content_type = None
+
+    media_type = content_type or item.media_type
+
+    data_type = media_type
+    if type_format == 'extension':
+        data_type = item.format
+
+    data = response.content
+    if data_format in ('base64', 'base64_uri'):
+        data = base64.b64encode(data).decode('utf-8')
+        if data_format == 'base64_uri':
+            data = f'data:{media_type};base64,{data}'
+        return DownloadedItem[str](data=data, data_type=data_type)
+    elif data_format == 'text':
+        return DownloadedItem[str](data=data.decode('utf-8'), data_type=data_type)
+    else:
+        return DownloadedItem[bytes](data=data, data_type=data_type)","async def download_item(
+    item: FileUrl,
+    data_format: Literal['bytes', 'base64', 'base64_uri', 'text'] = 'bytes',
+    type_format: Literal['mime', 'extension'] = 'mime',
+) -> DownloadedItem[str] | DownloadedItem[bytes]:
+    """"""Download an item by URL and return the content as a bytes object or a (base64-encoded) string.
+
+    This function includes SSRF (Server-Side Request Forgery) protection:
+    - Only http:// and https:// protocols are allowed
+    - Private/internal IP addresses are blocked by default
+    - Cloud metadata endpoints (169.254.169.254) are always blocked
+    - Hostnames are resolved before requests to prevent DNS rebinding
+
+    Set `item.force_download='allow-local'` to allow private IP addresses.
+
+    Args:
+        item: The item to download.
+        data_format: The format to return the content in:
+            - `bytes`: The raw bytes of the content.
+            - `base64`: The base64-encoded content.
+            - `base64_uri`: The base64-encoded content as a data URI.
+            - `text`: The content as a string.
+        type_format: The format to return the media type in:
+            - `mime`: The media type as a MIME type.
+            - `extension`: The media type as an extension.
+
+    Raises:
+        UserError: If the URL points to a YouTube video.
+        ValueError: If the URL uses an unsupported protocol or targets a private/internal
+            IP address (unless allow-local is set).
+    """"""
+    if isinstance(item, VideoUrl) and item.is_youtube:
+        raise UserError('Downloading YouTube videos is not supported.')
+
+    from .._ssrf import safe_download
+
+    allow_local = item.force_download == 'allow-local'
+    response = await safe_download(item.url, allow_local=allow_local)
+
+    if content_type := response.headers.get('content-type'):
+        content_type = content_type.split(';')[0]
+        if content_type == 'application/octet-stream':
+            content_type = None
+
+    media_type = content_type or item.media_type
+
+    data_type = media_type
+    if type_format == 'extension':
+        data_type = item.format
+
+    data = response.content
+    if data_format in ('base64', 'base64_uri'):
+        data = base64.b64encode(data).decode('utf-8')
+        if data_format == 'base64_uri':
+            data = f'data:{media_type};base64,{data}'
+        return DownloadedItem[str](data=data, data_type=data_type)
+    elif data_format == 'text':
+        return DownloadedItem[str](data=data.decode('utf-8'), data_type=data_type)
+    else:
+        return DownloadedItem[bytes](data=data, data_type=data_type)"
+Insecure Deserialization,"def serializable(my_id: int, my_file_ext: str) -> Any:
+    """"""
+    Decorator for a serializable class -- i.e. subclass of
+    :class:`~epyt_flow.serialization.Serializable`.
+
+    This decorator registers a new class as a serializable class.
+
+    Parameters
+    ----------
+    my_id : `int`
+        ID of the class.
+    my_file_ext : `str`
+        File extension.
+    """"""
+    def wrapper(my_class):
+        @staticmethod
+        def unpackb(data: bytes) -> Any:
+            return my_class(**my_unpackb(data))
+        setattr(my_class, ""unpackb"", unpackb)
+
+        @staticmethod
+        def file_ext() -> str:
+            return my_file_ext
+        setattr(my_class, ""file_ext"", file_ext)
+
+        return umsgpack.ext_serializable(my_id)(my_class)
+
+    return wrapper","def serializable(my_id: int, my_file_ext: str) -> Any:
+    """"""
+    Decorator for a serializable class -- i.e. subclass of
+    :class:`~epyt_flow.serialization.Serializable`.
+
+    This decorator registers a new class as a serializable class.
+
+    Parameters
+    ----------
+    my_id : `int`
+        ID of the class.
+    my_file_ext : `str`
+        File extension.
+    """"""
+    def wrapper(my_class):
+        if issubclass(my_class, JsonSerializable):
+            JSON_SERIALIZABLE[(my_class.__module__, my_class.__name__)] = my_class
+
+        @staticmethod
+        def unpackb(data: bytes) -> Any:
+            return my_class(**my_unpackb(data))
+        setattr(my_class, ""unpackb"", unpackb)
+
+        @staticmethod
+        def file_ext() -> str:
+            return my_file_ext
+        setattr(my_class, ""file_ext"", file_ext)
+
+        return umsgpack.ext_serializable(my_id)(my_class)
+
+    return wrapper"
+Insecure Deserialization,"    def __object_hook(obj: dict) -> dict:
+        if ""__type__"" in obj:
+            module_name, class_name = obj[""__type__""]
+            cls = getattr(importlib.import_module(module_name), class_name)
+            del obj[""__type__""]
+
+            for attr in obj:
+                if isinstance(attr, dict):
+                    obj[attr] = __object_hook(obj[attr])
+
+            return cls(**obj)
+        return obj","    def __object_hook(obj: dict):
+        t = obj.get(""__type__"")
+        if not t:
+            return obj
+
+        if not (isinstance(t, (list, tuple)) and len(t) == 2 and
+                all(isinstance(x, str) for x in t)):
+            raise ValueError(""Invalid __type__"")
+
+        key = (t[0], t[1])
+        cls = JSON_SERIALIZABLE.get(key)
+        if cls is None:
+            raise ValueError(f""Type not allowed: {key}"")
+
+        args = {k: v for k, v in obj.items() if k != ""__type__""}
+        return cls(**args)"
+Command Injection,"func buildEvalRunCommand(_ *config.Pipeline, debugOption rune, workdir string, fragment string) []string {
+	script := fmt.Sprintf(`set -e%c
+[ -d '%s' ] || mkdir -p '%s'
+cd '%s'
+%s
+exit 0`, debugOption, workdir, workdir, workdir, fragment)
+	return []string{""/bin/sh"", ""-c"", script}
+}","func buildEvalRunCommand(_ *config.Pipeline, debugOption rune, workdir string, fragment string) []string {
+	// Quote workdir to prevent shell injection (GHSA-vqqr-rmpc-hhg2)
+	// This is critical when workdir contains substituted variables from user input
+	// Using go-shellquote library for robust shell escaping
+	safeWorkdir := quoteShellArg(workdir)
+
+	script := fmt.Sprintf(`set -e%c
+[ -d %s ] || mkdir -p %s
+cd %s
+%s
+exit 0`, debugOption, safeWorkdir, safeWorkdir, safeWorkdir, fragment)
+	return []string{""/bin/sh"", ""-c"", script}
+}"
+Command Injection,"func (r *pipelineRunner) maybeDebug(ctx context.Context, fragment string, envOverride map[string]string, cmd []string, workdir string, runErr error) error {
+	if !r.interactive {
+		return runErr
+	}
+
+	log := clog.FromContext(ctx)
+
+	dbg, ok := r.runner.(container.Debugger)
+	if !ok {
+		log.Errorf(""TODO: Implement Debug() for Runner: %T"", r.runner)
+		return runErr
+	}
+
+	// This is a bit of a hack but I want non-busybox shells to have a working history during interactive debugging,
+	// and I suspect busybox is the least helpful here, so just make everything read from $HOME/.ash_history.
+	if home, ok := envOverride[""HOME""]; ok {
+		envOverride[""HISTFILE""] = path.Join(home, "".ash_history"")
+	} else if home, ok := r.config.Environment[""HOME""]; ok {
+		envOverride[""HISTFILE""] = path.Join(home, "".ash_history"")
+	}
+
+	// Required for many TUIs (emacs, make menuconfig, etc)
+	termType := os.Getenv(""TERM"")
+	if termType == """" {
+		termType = ""xterm-256color""
+	}
+	envOverride[""TERM""] = termType
+
+	log.Errorf(""Step failed: %v\n%s"", runErr, strings.Join(cmd, "" ""))
+	log.Info(fmt.Sprintf(""Execing into pod %q to debug interactively."", r.config.PodID), ""workdir"", workdir)
+	log.Infof(""Type 'exit 0' to continue the next pipeline step or 'exit 1' to abort."")
+
+	// If the context has already been cancelled, return before we mess with it.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Don't cancel the context if we hit ctrl+C while debugging.
+	signal.Ignore(os.Interrupt)
+
+	// Populate $HOME/.ash_history with the current command so you can hit up arrow to repeat it.
+	// #nosec G306 - Shell history file in workspace directory
+	if err := os.WriteFile(filepath.Join(r.config.WorkspaceDir, "".ash_history""), []byte(fragment), 0o644); err != nil {
+		return fmt.Errorf(""failed to write history file: %w"", err)
+	}
+
+	if dbgErr := dbg.Debug(ctx, r.config, envOverride, []string{""/bin/sh"", ""-c"", fmt.Sprintf(""cd %s && exec /bin/sh"", workdir)}...); dbgErr != nil {
+		return fmt.Errorf(""failed to debug: %w; original error: %w"", dbgErr, runErr)
+	}
+
+	// Reset to the default signal handling.
+	signal.Reset(os.Interrupt)
+
+	// If Debug() returns successfully (via exit 0), it is a signal to continue execution.
+	return nil
+}","func (r *pipelineRunner) maybeDebug(ctx context.Context, fragment string, envOverride map[string]string, cmd []string, workdir string, runErr error) error {
+	if !r.interactive {
+		return runErr
+	}
+
+	log := clog.FromContext(ctx)
+
+	dbg, ok := r.runner.(container.Debugger)
+	if !ok {
+		log.Errorf(""TODO: Implement Debug() for Runner: %T"", r.runner)
+		return runErr
+	}
+
+	// This is a bit of a hack but I want non-busybox shells to have a working history during interactive debugging,
+	// and I suspect busybox is the least helpful here, so just make everything read from $HOME/.ash_history.
+	if home, ok := envOverride[""HOME""]; ok {
+		envOverride[""HISTFILE""] = path.Join(home, "".ash_history"")
+	} else if home, ok := r.config.Environment[""HOME""]; ok {
+		envOverride[""HISTFILE""] = path.Join(home, "".ash_history"")
+	}
+
+	// Required for many TUIs (emacs, make menuconfig, etc)
+	termType := os.Getenv(""TERM"")
+	if termType == """" {
+		termType = ""xterm-256color""
+	}
+	envOverride[""TERM""] = termType
+
+	log.Errorf(""Step failed: %v\n%s"", runErr, strings.Join(cmd, "" ""))
+	log.Info(fmt.Sprintf(""Execing into pod %q to debug interactively."", r.config.PodID), ""workdir"", workdir)
+	log.Infof(""Type 'exit 0' to continue the next pipeline step or 'exit 1' to abort."")
+
+	// If the context has already been cancelled, return before we mess with it.
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	// Don't cancel the context if we hit ctrl+C while debugging.
+	signal.Ignore(os.Interrupt)
+
+	// Populate $HOME/.ash_history with the current command so you can hit up arrow to repeat it.
+	// #nosec G306 - Shell history file in workspace directory
+	if err := os.WriteFile(filepath.Join(r.config.WorkspaceDir, "".ash_history""), []byte(fragment), 0o644); err != nil {
+		return fmt.Errorf(""failed to write history file: %w"", err)
+	}
+
+	// Quote workdir to prevent shell injection (GHSA-vqqr-rmpc-hhg2)
+	// Using go-shellquote library for robust shell escaping
+	safeWorkdir := quoteShellArg(workdir)
+	if dbgErr := dbg.Debug(ctx, r.config, envOverride, []string{""/bin/sh"", ""-c"", fmt.Sprintf(""cd %s && exec /bin/sh"", safeWorkdir)}...); dbgErr != nil {
+		return fmt.Errorf(""failed to debug: %w; original error: %w"", dbgErr, runErr)
+	}
+
+	// Reset to the default signal handling.
+	signal.Reset(os.Interrupt)
+
+	// If Debug() returns successfully (via exit 0), it is a signal to continue execution.
+	return nil
+}"
+Path Traversal,"func copyFile(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	src := arg[""src""].(string)
+	src, err := model.GetAssetAbsPath(src)
+	if err != nil {
+		logging.LogErrorf(""get asset [%s] abs path failed: %s"", src, err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		logging.LogErrorf(""stat [%s] failed: %s"", src, err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	if info.IsDir() {
+		ret.Code = -1
+		ret.Msg = ""file is a directory""
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	dest := arg[""dest""].(string)
+	if err = filelock.Copy(src, dest); err != nil {
+		logging.LogErrorf(""copy file [%s] to [%s] failed: %s"", src, dest, err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	model.IncSync()
+}","func copyFile(c *gin.Context) {
+	ret := gulu.Ret.NewResult()
+	defer c.JSON(http.StatusOK, ret)
+
+	arg, ok := util.JsonArg(c, ret)
+	if !ok {
+		return
+	}
+
+	src := arg[""src""].(string)
+	src, err := model.GetAssetAbsPath(src)
+	if err != nil {
+		logging.LogErrorf(""get asset [%s] abs path failed: %s"", src, err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	info, err := os.Stat(src)
+	if err != nil {
+		logging.LogErrorf(""stat [%s] failed: %s"", src, err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	if info.IsDir() {
+		ret.Code = -1
+		ret.Msg = ""file is a directory""
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	dest := arg[""dest""].(string)
+	if util.IsSensitivePath(dest) {
+		msg := fmt.Sprintf(""refuse to copy sensitive file [%s]"", dest)
+		logging.LogErrorf(msg)
+		ret.Code = -2
+		ret.Msg = msg
+		return
+	}
+
+	if err = filelock.Copy(src, dest); err != nil {
+		logging.LogErrorf(""copy file [%s] to [%s] failed: %s"", src, dest, err)
+		ret.Code = -1
+		ret.Msg = err.Error()
+		ret.Data = map[string]interface{}{""closeTimeout"": 5000}
+		return
+	}
+
+	model.IncSync()
+}"
+Path Traversal,"func IsSensitivePath(p string) bool {
+	if p == """" {
+		return false
+	}
+	pp := filepath.Clean(strings.ToLower(p))
+
+	// 精确敏感文件
+	exact := []string{
+		""/etc/passwd"",
+		""/etc/shadow"",
+		""/etc/gshadow"",
+		""/var/run/secrets/kubernetes.io/serviceaccount/token"",
+	}
+	for _, e := range exact {
+		if pp == e {
+			return true
+		}
+	}
+
+	// 敏感目录前缀（UNIX 风格）
+	prefixes := []string{
+		""/etc/ssh"",
+		""/root"",
+		""/etc/ssl"",
+		""/etc/letsencrypt"",
+		""/var/lib/docker"",
+		""/.gnupg"",
+		""/.ssh"",
+		""/.aws"",
+		""/.kube"",
+		""/.docker"",
+		""/.config/gcloud"",
+	}
+	for _, pre := range prefixes {
+		if strings.HasPrefix(pp, pre) {
+			return true
+		}
+	}
+
+	// Windows 常见敏感目录（小写比较）
+	winPrefixes := []string{
+		`c:\windows\system32`,
+		`c:\windows\system`,
+		`c:\users\`,
+	}
+	for _, wp := range winPrefixes {
+		if strings.HasPrefix(pp, strings.ToLower(wp)) {
+			return true
+		}
+	}
+
+	// 文件名级别检查
+	base := filepath.Base(pp)
+	n := strings.ToLower(base)
+	sensitiveNames := map[string]struct{}{
+		"".env"":            {},
+		"".env.local"":      {},
+		"".npmrc"":          {},
+		"".netrc"":          {},
+		""id_rsa"":          {},
+		""id_dsa"":          {},
+		""id_ecdsa"":        {},
+		""id_ed25519"":      {},
+		""authorized_keys"": {},
+		""passwd"":          {},
+		""shadow"":          {},
+		""pgpass"":          {},
+		""hosts"":           {},
+		""credentials"":     {}, // 如 aws credentials
+		""config.json"":     {}, // docker config.json 可能含 token
+	}
+	if _, ok := sensitiveNames[n]; ok {
+		return true
+	}
+	// 支持 .env.* 之类的模式
+	if n == "".env"" || strings.HasPrefix(n, "".env."") {
+		return true
+	}
+
+	// 扩展名级别检查
+	ext := strings.ToLower(filepath.Ext(n))
+	sensitiveExts := []string{
+		"".pem"", "".key"", "".p12"", "".pfx"", "".ppk"", "".asc"", "".gpg"",
+	}
+	for _, se := range sensitiveExts {
+		if ext == se {
+			return true
+		}
+	}
+	return false
+}","func IsSensitivePath(p string) bool {
+	if p == """" {
+		return false
+	}
+	pp := filepath.Clean(strings.ToLower(p))
+
+	// 精确敏感文件
+	exact := []string{
+		""/etc/passwd"",
+		""/etc/shadow"",
+		""/etc/gshadow"",
+		""/var/run/secrets/kubernetes.io/serviceaccount/token"",
+	}
+	for _, e := range exact {
+		if pp == e {
+			return true
+		}
+	}
+
+	// 敏感目录前缀（UNIX 风格）
+	prefixes := []string{
+		""/etc/ssh"",
+		""/root"",
+		""/etc/ssl"",
+		""/etc/cron.d/"",
+		""/etc/letsencrypt"",
+		""/var/lib/docker"",
+		""/.gnupg"",
+		""/.ssh"",
+		""/.aws"",
+		""/.kube"",
+		""/.docker"",
+		""/.config/gcloud"",
+	}
+	for _, pre := range prefixes {
+		if strings.HasPrefix(pp, pre) {
+			return true
+		}
+	}
+
+	// Windows 常见敏感目录（小写比较）
+	winPrefixes := []string{
+		`c:\windows\system32`,
+		`c:\windows\system`,
+		`c:\users\`,
+	}
+	for _, wp := range winPrefixes {
+		if strings.HasPrefix(pp, strings.ToLower(wp)) {
+			return true
+		}
+	}
+
+	// 文件名级别检查
+	base := filepath.Base(pp)
+	n := strings.ToLower(base)
+	sensitiveNames := map[string]struct{}{
+		"".bashrc"":         {},
+		"".env"":            {},
+		"".env.local"":      {},
+		"".npmrc"":          {},
+		"".netrc"":          {},
+		""id_rsa"":          {},
+		""id_dsa"":          {},
+		""id_ecdsa"":        {},
+		""id_ed25519"":      {},
+		""authorized_keys"": {},
+		""passwd"":          {},
+		""shadow"":          {},
+		""pgpass"":          {},
+		""hosts"":           {},
+		""credentials"":     {}, // 如 aws credentials
+		""config.json"":     {}, // docker config.json 可能含 token
+	}
+	if _, ok := sensitiveNames[n]; ok {
+		return true
+	}
+	// 支持 .env.* 之类的模式
+	if n == "".env"" || strings.HasPrefix(n, "".env."") {
+		return true
+	}
+
+	// 扩展名级别检查
+	ext := strings.ToLower(filepath.Ext(n))
+	sensitiveExts := []string{
+		"".pem"", "".key"", "".p12"", "".pfx"", "".ppk"", "".asc"", "".gpg"",
+	}
+	for _, se := range sensitiveExts {
+		if ext == se {
+			return true
+		}
+	}
+	return false
+}"
+Path Traversal,"func (b *Build) retrieveWorkspace(ctx context.Context, fs apkofs.FullFS) error {
+	ctx, span := otel.Tracer(""melange"").Start(ctx, ""retrieveWorkspace"")
+	defer span.End()
+
+	extraFiles := []string{}
+	for _, v := range b.Configuration.Package.Copyright {
+		if v.LicensePath != """" {
+			extraFiles = append(extraFiles, v.LicensePath)
+		}
+	}
+
+	r, err := b.Runner.WorkspaceTar(ctx, b.containerConfig, extraFiles)
+	if err != nil {
+		return err
+	} else if r == nil {
+		return nil
+	}
+	defer r.Close()
+
+	tr := tar.NewReader(r)
+
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		// Remove the leading ""./"" from LICENSE files in QEMU workspaces
+		hdr.Name = strings.TrimPrefix(hdr.Name, ""./"")
+
+		var uid, gid int
+		fi := hdr.FileInfo()
+		if stat, ok := fi.Sys().(*tar.Header); ok {
+			uid = stat.Uid
+			gid = stat.Gid
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if fi, err := fs.Stat(hdr.Name); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				if target, err := fs.Readlink(hdr.Name); err == nil {
+					if fi, err = fs.Stat(target); err == nil && fi.IsDir() {
+						break
+					}
+				}
+			}
+
+			if err := fs.MkdirAll(hdr.Name, hdr.FileInfo().Mode().Perm()); err != nil {
+				return fmt.Errorf(""unable to create directory %s: %w"", hdr.Name, err)
+			}
+
+			if err := fs.Chown(hdr.Name, uid, gid); err != nil {
+				return fmt.Errorf(""unable to chown directory %s: %w"", hdr.Name, err)
+			}
+
+		case tar.TypeReg:
+			parentDir := filepath.Dir(hdr.Name)
+			if err := fs.MkdirAll(parentDir, 0o755); err != nil {
+				return fmt.Errorf(""unable to create directory %s: %w"", hdr.Name, err)
+			}
+			f, err := fs.OpenFile(hdr.Name, os.O_CREATE|os.O_WRONLY, hdr.FileInfo().Mode())
+			if err != nil {
+				return fmt.Errorf(""unable to open file %s: %w"", hdr.Name, err)
+			}
+
+			if _, err := io.CopyN(f, tr, hdr.Size); err != nil {
+				return fmt.Errorf(""unable to copy file %s: %w"", hdr.Name, err)
+			}
+
+			if err := f.Close(); err != nil {
+				return fmt.Errorf(""unable to close file %s: %w"", hdr.Name, err)
+			}
+
+			if err := fs.Chown(hdr.Name, uid, gid); err != nil {
+				return fmt.Errorf(""unable to chown file %s: %w"", hdr.Name, err)
+			}
+
+		case tar.TypeSymlink:
+			if target, err := fs.Readlink(hdr.Name); err == nil && target == hdr.Linkname {
+				continue
+			}
+
+			if err := fs.Symlink(hdr.Linkname, hdr.Name); err != nil {
+				return fmt.Errorf(""unable to create symlink %s -> %s: %w"", hdr.Name, hdr.Linkname, err)
+			}
+
+		case tar.TypeLink:
+			if err := fs.Link(hdr.Linkname, hdr.Name); err != nil {
+				return err
+			}
+
+		default:
+			return fmt.Errorf(""unexpected tar type %d for %s"", hdr.Typeflag, hdr.Name)
+		}
+
+		for k, v := range hdr.PAXRecords {
+			if !strings.HasPrefix(k, ""SCHILY.xattr."") {
+				continue
+			}
+			attrName := strings.TrimPrefix(k, ""SCHILY.xattr."")
+			// XFS specific priviledged copies of posix. xattrs
+			if strings.HasPrefix(attrName, ""trusted."") {
+				continue
+			}
+			fmt.Println(""setting xattr"", attrName, ""on"", hdr.Name)
+			if err := fs.SetXattr(hdr.Name, attrName, []byte(v)); err != nil {
+				return fmt.Errorf(""unable to set xattr %s on %s: %w"", attrName, hdr.Name, err)
+			}
+		}
+	}
+
+	return nil
+}","func (b *Build) retrieveWorkspace(ctx context.Context, fs apkofs.FullFS) error {
+	ctx, span := otel.Tracer(""melange"").Start(ctx, ""retrieveWorkspace"")
+	defer span.End()
+
+	extraFiles := []string{}
+	for _, v := range b.Configuration.Package.Copyright {
+		if v.LicensePath != """" {
+			extraFiles = append(extraFiles, v.LicensePath)
+		}
+	}
+
+	r, err := b.Runner.WorkspaceTar(ctx, b.containerConfig, extraFiles)
+	if err != nil {
+		return err
+	} else if r == nil {
+		return nil
+	}
+	defer r.Close()
+
+	tr := tar.NewReader(r)
+
+	for {
+		hdr, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+
+		// Remove the leading ""./"" from LICENSE files in QEMU workspaces
+		hdr.Name = strings.TrimPrefix(hdr.Name, ""./"")
+
+		// Validate the tar entry name to prevent path traversal attacks (CVE-PENDING: GHSA-qxx2-7h4c-83f4)
+		// This validation applies to ALL entry types: directories, regular files, symlinks, and hardlinks
+		if err := isValidPath(hdr.Name, b.WorkspaceDir); err != nil {
+			return fmt.Errorf(""invalid tar entry path %q: %w"", hdr.Name, err)
+		}
+
+		var uid, gid int
+		fi := hdr.FileInfo()
+		if stat, ok := fi.Sys().(*tar.Header); ok {
+			uid = stat.Uid
+			gid = stat.Gid
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if fi, err := fs.Stat(hdr.Name); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+				if target, err := fs.Readlink(hdr.Name); err == nil {
+					if fi, err = fs.Stat(target); err == nil && fi.IsDir() {
+						break
+					}
+				}
+			}
+
+			if err := fs.MkdirAll(hdr.Name, hdr.FileInfo().Mode().Perm()); err != nil {
+				return fmt.Errorf(""unable to create directory %s: %w"", hdr.Name, err)
+			}
+
+			if err := fs.Chown(hdr.Name, uid, gid); err != nil {
+				return fmt.Errorf(""unable to chown directory %s: %w"", hdr.Name, err)
+			}
+
+		case tar.TypeReg:
+			parentDir := filepath.Dir(hdr.Name)
+			if err := fs.MkdirAll(parentDir, 0o755); err != nil {
+				return fmt.Errorf(""unable to create directory %s: %w"", hdr.Name, err)
+			}
+			f, err := fs.OpenFile(hdr.Name, os.O_CREATE|os.O_WRONLY, hdr.FileInfo().Mode())
+			if err != nil {
+				return fmt.Errorf(""unable to open file %s: %w"", hdr.Name, err)
+			}
+
+			if _, err := io.CopyN(f, tr, hdr.Size); err != nil {
+				return fmt.Errorf(""unable to copy file %s: %w"", hdr.Name, err)
+			}
+
+			if err := f.Close(); err != nil {
+				return fmt.Errorf(""unable to close file %s: %w"", hdr.Name, err)
+			}
+
+			if err := fs.Chown(hdr.Name, uid, gid); err != nil {
+				return fmt.Errorf(""unable to chown file %s: %w"", hdr.Name, err)
+			}
+
+		case tar.TypeSymlink:
+			// Validate symlink target to prevent symlink attacks (CVE-PENDING: GHSA-qxx2-7h4c-83f4)
+			// Note: hdr.Name was already validated above; this validates the symlink destination
+			if err := isValidPath(hdr.Linkname, b.WorkspaceDir); err != nil {
+				return fmt.Errorf(""invalid symlink target %q -> %q: %w"", hdr.Name, hdr.Linkname, err)
+			}
+
+			if target, err := fs.Readlink(hdr.Name); err == nil && target == hdr.Linkname {
+				continue
+			}
+
+			if err := fs.Symlink(hdr.Linkname, hdr.Name); err != nil {
+				return fmt.Errorf(""unable to create symlink %s -> %s: %w"", hdr.Name, hdr.Linkname, err)
+			}
+
+		case tar.TypeLink:
+			// Validate hardlink target to prevent link attacks (CVE-PENDING: GHSA-qxx2-7h4c-83f4)
+			// Note: hdr.Name was already validated above; this validates the hardlink destination
+			if err := isValidPath(hdr.Linkname, b.WorkspaceDir); err != nil {
+				return fmt.Errorf(""invalid hardlink target %q -> %q: %w"", hdr.Name, hdr.Linkname, err)
+			}
+
+			if err := fs.Link(hdr.Linkname, hdr.Name); err != nil {
+				return err
+			}
+
+		default:
+			return fmt.Errorf(""unexpected tar type %d for %s"", hdr.Typeflag, hdr.Name)
+		}
+
+		for k, v := range hdr.PAXRecords {
+			if !strings.HasPrefix(k, ""SCHILY.xattr."") {
+				continue
+			}
+			attrName := strings.TrimPrefix(k, ""SCHILY.xattr."")
+			// XFS specific priviledged copies of posix. xattrs
+			if strings.HasPrefix(attrName, ""trusted."") {
+				continue
+			}
+			fmt.Println(""setting xattr"", attrName, ""on"", hdr.Name)
+			if err := fs.SetXattr(hdr.Name, attrName, []byte(v)); err != nil {
+				return fmt.Errorf(""unable to set xattr %s on %s: %w"", attrName, hdr.Name, err)
+			}
+		}
+	}
+
+	return nil
+}"
+Path Traversal,"func FsArchiveDecompress(c *gin.Context) {
+	var req ArchiveDecompressReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if !user.CanDecompress() {
+		common.ErrorResp(c, errs.PermissionDenied, 403)
+		return
+	}
+	srcPaths := make([]string, 0, len(req.Name))
+	for _, name := range req.Name {
+		srcPath, err := user.JoinPath(stdpath.Join(req.SrcDir, name))
+		if err != nil {
+			common.ErrorResp(c, err, 403)
+			return
+		}
+		srcPaths = append(srcPaths, srcPath)
+	}
+	dstDir, err := user.JoinPath(req.DstDir)
+	if err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
+	tasks := make([]task.TaskExtensionInfo, 0, len(srcPaths))
+	for _, srcPath := range srcPaths {
+		t, e := fs.ArchiveDecompress(c.Request.Context(), srcPath, dstDir, model.ArchiveDecompressArgs{
+			ArchiveInnerArgs: model.ArchiveInnerArgs{
+				ArchiveArgs: model.ArchiveArgs{
+					LinkArgs: model.LinkArgs{
+						Header: c.Request.Header,
+						Type:   c.Query(""type""),
+					},
+					Password: req.ArchivePass,
+				},
+				InnerPath: utils.FixAndCleanPath(req.InnerPath),
+			},
+			CacheFull:     req.CacheFull,
+			PutIntoNewDir: req.PutIntoNewDir,
+			Overwrite:     req.Overwrite,
+		})
+		if e != nil {
+			if errors.Is(e, errs.WrongArchivePassword) {
+				common.ErrorResp(c, e, 202)
+			} else {
+				common.ErrorResp(c, e, 500)
+			}
+			return
+		}
+		if t != nil {
+			tasks = append(tasks, t)
+		}
+	}
+	common.SuccessResp(c, gin.H{
+		""task"": getTaskInfos(tasks),
+	})
+}","func FsArchiveDecompress(c *gin.Context) {
+	var req ArchiveDecompressReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if !user.CanDecompress() {
+		common.ErrorResp(c, errs.PermissionDenied, 403)
+		return
+	}
+	srcPaths := make([]string, 0, len(req.Names))
+	for _, name := range req.Names {
+		srcPath, err := user.JoinPath(stdpath.Join(req.SrcDir, name))
+		if err != nil {
+			common.ErrorResp(c, err, 403)
+			return
+		}
+		srcPaths = append(srcPaths, srcPath)
+	}
+	dstDir, err := user.JoinPath(req.DstDir)
+	if err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
+	tasks := make([]task.TaskExtensionInfo, 0, len(srcPaths))
+	for _, srcPath := range srcPaths {
+		t, e := fs.ArchiveDecompress(c.Request.Context(), srcPath, dstDir, model.ArchiveDecompressArgs{
+			ArchiveInnerArgs: model.ArchiveInnerArgs{
+				ArchiveArgs: model.ArchiveArgs{
+					LinkArgs: model.LinkArgs{
+						Header: c.Request.Header,
+						Type:   c.Query(""type""),
+					},
+					Password: req.ArchivePass,
+				},
+				InnerPath: utils.FixAndCleanPath(req.InnerPath),
+			},
+			CacheFull:     req.CacheFull,
+			PutIntoNewDir: req.PutIntoNewDir,
+			Overwrite:     req.Overwrite,
+		})
+		if e != nil {
+			if errors.Is(e, errs.WrongArchivePassword) {
+				common.ErrorResp(c, e, 202)
+			} else {
+				common.ErrorResp(c, e, 500)
+			}
+			return
+		}
+		if t != nil {
+			tasks = append(tasks, t)
+		}
+	}
+	common.SuccessResp(c, gin.H{
+		""task"": getTaskInfos(tasks),
+	})
+}"
+Path Traversal,"func FsRemove(c *gin.Context) {
+	var req RemoveReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	if len(req.Names) == 0 {
+		common.ErrorStrResp(c, ""Empty file names"", 400)
+		return
+	}
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if !user.CanRemove() {
+		common.ErrorResp(c, errs.PermissionDenied, 403)
+		return
+	}
+	reqDir, err := user.JoinPath(req.Dir)
+	if err != nil {
+		common.ErrorResp(c, err, 403)
+		return
+	}
+	for _, name := range req.Names {
+		// Skip invalid item names (empty string, whitespace, ""."", ""/"",""\t\t"","".."") to prevent accidental removal of current directory
+		if strings.TrimSpace(utils.FixAndCleanPath(name)) == ""/"" {
+			utils.Log.Warnf(""FsRemove: invalid item skipped: %s (parent directory: %s)\n"", name, reqDir)
+			continue
+		}
+		err := fs.Remove(c.Request.Context(), stdpath.Join(reqDir, name))
+		if err != nil {
+			common.ErrorResp(c, err, 500)
+			return
+		}
+	}
+	//fs.ClearCache(req.Dir)
+	common.SuccessResp(c)
+}","func FsRemove(c *gin.Context) {
+	var req RemoveReq
+	if err := c.ShouldBind(&req); err != nil {
+		common.ErrorResp(c, err, 400)
+		return
+	}
+	if len(req.Names) == 0 {
+		common.ErrorStrResp(c, ""Empty file names"", 400)
+		return
+	}
+	user := c.Request.Context().Value(conf.UserKey).(*model.User)
+	if !user.CanRemove() {
+		common.ErrorResp(c, errs.PermissionDenied, 403)
+		return
+	}
+	for i, name := range req.Names {
+		if strings.TrimSpace(utils.FixAndCleanPath(name)) == ""/"" {
+			log.Warnf(""FsRemove: invalid item skipped: %s (parent directory: %s)\n"", name, req.Dir)
+			req.Names[i] = """"
+			continue
+		}
+		// ensure req.Names is not a relative path
+		var err error
+		req.Names[i], err = user.JoinPath(stdpath.Join(req.Dir, name))
+		if err != nil {
+			common.ErrorResp(c, err, 403)
+			return
+		}
+	}
+	for _, path := range req.Names {
+		if path == """" {
+			continue
+		}
+		err := fs.Remove(c.Request.Context(), path)
+		if err != nil {
+			common.ErrorResp(c, err, 500)
+			return
+		}
+	}
+	//fs.ClearCache(req.Dir)
+	common.SuccessResp(c)
+}"
+SSRF,"func New(
+	logger logr.Logger,
+	jp jmespath.Interface,
+	entry kyvernov1.ContextEntry,
+	jsonCtx enginecontext.Interface,
+	client ClientInterface,
+	apiCallConfig APICallConfiguration,
+) (*apiCall, error) {
+	if entry.APICall == nil {
+		return nil, fmt.Errorf(""missing APICall in context entry %v"", entry)
+	}
+
+	executor := NewExecutor(logger, entry.Name, client, apiCallConfig)
+
+	return &apiCall{
+		logger:   logger,
+		jp:       jp,
+		entry:    entry,
+		jsonCtx:  jsonCtx,
+		executor: executor,
+	}, nil
+}","func New(
+	logger logr.Logger,
+	jp jmespath.Interface,
+	entry kyvernov1.ContextEntry,
+	jsonCtx enginecontext.Interface,
+	client ClientInterface,
+	apiCallConfig APICallConfiguration,
+	policyNamespace string,
+) (*apiCall, error) {
+	if entry.APICall == nil {
+		return nil, fmt.Errorf(""missing APICall in context entry %v"", entry)
+	}
+
+	executor := NewExecutor(logger, entry.Name, client, apiCallConfig)
+
+	return &apiCall{
+		logger:          logger,
+		jp:              jp,
+		entry:           entry,
+		jsonCtx:         jsonCtx,
+		executor:        executor,
+		policyNamespace: policyNamespace,
+	}, nil
+}"
+SSRF,"func (a *apiCall) Fetch(ctx context.Context) ([]byte, error) {
+	call, err := variables.SubstituteAllInType(a.logger, a.jsonCtx, a.entry.APICall)
+	if err != nil {
+		return nil, fmt.Errorf(""failed to substitute variables in context entry %s %s: %v"", a.entry.Name, a.entry.APICall.URLPath, err)
+	}
+	data, err := a.Execute(ctx, &call.APICall)
+	if err != nil {
+		if data == nil && a.entry.APICall.Default != nil {
+			data = a.entry.APICall.Default.Raw
+			a.logger.V(4).Info(""failed to substitute variable data for APICall, using default value"", ""default"", data, ""name"", a.entry.Name, ""URLPath"", a.entry.APICall.URLPath, ""error"", err)
+			return data, nil
+		}
+		return nil, err
+	}
+	return data, nil
+}","func (a *apiCall) Fetch(ctx context.Context) ([]byte, error) {
+	call, err := variables.SubstituteAllInType(a.logger, a.jsonCtx, a.entry.APICall)
+	if err != nil {
+		return nil, fmt.Errorf(""failed to substitute variables in context entry %s %s: %v"", a.entry.Name, a.entry.APICall.URLPath, err)
+	}
+
+	if a.policyNamespace != """" {
+		cleanPath := path.Clean(call.APICall.URLPath)
+		if matches := namespacePathRegex.FindStringSubmatch(cleanPath); len(matches) > 2 {
+			ns := matches[2]
+			if ns != a.policyNamespace {
+				return nil, fmt.Errorf(""path %s refers to namespace %s, which is different from the policy namespace %s"", cleanPath, ns, a.policyNamespace)
+			}
+		} else {
+			return nil, fmt.Errorf(""path %s does not contain a namespace segment, which is required for namespaced policies"", cleanPath)
+		}
+	}
+
+	data, err := a.Execute(ctx, &call.APICall)
+	if err != nil {
+		if data == nil && a.entry.APICall.Default != nil {
+			data = a.entry.APICall.Default.Raw
+			a.logger.V(4).Info(""failed to substitute variable data for APICall, using default value"", ""default"", data, ""name"", a.entry.Name, ""URLPath"", a.entry.APICall.URLPath, ""error"", err)
+			return data, nil
+		}
+		return nil, err
+	}
+	return data, nil
+}"
+Authorization Bypass,"func (handler AttributesRestHandlerImpl) GetAttributesById(w http.ResponseWriter, r *http.Request) {
+	userId, err := handler.userService.GetLoggedInUser(r)
+	if userId == 0 || err != nil {
+		common.HandleUnauthorized(w, r)
+		return
+	}
+
+	token := r.Header.Get(""token"")
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionGet, ""*""); !ok {
+		common.WriteJsonResp(w, errors.New(""unauthorized""), nil, http.StatusForbidden)
+		return
+	}
+
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars[""id""])
+	if err != nil {
+		common.WriteJsonResp(w, err, """", http.StatusBadRequest)
+		return
+	}
+	res, err := handler.attributesService.GetById(id)
+	if err != nil {
+		handler.logger.Errorw(""service err, GetAttributesById"", ""err"", err)
+		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+	common.WriteJsonResp(w, nil, res, http.StatusOK)
+}","func (handler AttributesRestHandlerImpl) GetAttributesById(w http.ResponseWriter, r *http.Request) {
+	userId, err := handler.userService.GetLoggedInUser(r)
+	if userId == 0 || err != nil {
+		common.HandleUnauthorized(w, r)
+		return
+	}
+
+	token := r.Header.Get(""token"")
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionGet, ""*""); !ok {
+		common.WriteJsonResp(w, errors.New(""unauthorized""), nil, http.StatusForbidden)
+		return
+	}
+
+	vars := mux.Vars(r)
+	id, err := strconv.Atoi(vars[""id""])
+	if err != nil {
+		common.WriteJsonResp(w, err, """", http.StatusBadRequest)
+		return
+	}
+	res, err := handler.attributesService.GetById(id)
+	if err != nil {
+		handler.logger.Errorw(""service err, GetAttributesById"", ""err"", err)
+		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+
+	// Filter out internal-only attributes
+	if res != nil && handler.isInternalOnlyKey(res.Key) {
+		handler.logger.Warnw(""attempt to read internal-only attribute"", ""key"", res.Key, ""userId"", userId)
+		common.WriteJsonResp(w, fmt.Errorf(""forbidden: cannot read attribute with key: %q"", res.Key), nil, http.StatusForbidden)
+		return
+	}
+
+	common.WriteJsonResp(w, nil, res, http.StatusOK)
+}"
+Authorization Bypass,"func (handler AttributesRestHandlerImpl) AddAttributes(w http.ResponseWriter, r *http.Request) {
+	userId, err := handler.userService.GetLoggedInUser(r)
+	if userId == 0 || err != nil {
+		common.HandleUnauthorized(w, r)
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	var dto bean.AttributesDto
+	err = decoder.Decode(&dto)
+	if err != nil {
+		handler.logger.Errorw(""request err, AddAttributes"", ""err"", err, ""payload"", dto)
+		common.WriteJsonResp(w, err, nil, http.StatusBadRequest)
+		return
+	}
+
+	token := r.Header.Get(""token"")
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionCreate, ""*""); !ok {
+		common.WriteJsonResp(w, errors.New(""unauthorized""), nil, http.StatusForbidden)
+		return
+	}
+
+	handler.logger.Infow(""request payload, AddAttributes"", ""payload"", dto)
+	resp, err := handler.attributesService.AddAttributes(&dto)
+	if err != nil {
+		handler.logger.Errorw(""service err, AddAttributes"", ""err"", err, ""payload"", dto)
+		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+	common.WriteJsonResp(w, nil, resp, http.StatusOK)
+}","func (handler AttributesRestHandlerImpl) AddAttributes(w http.ResponseWriter, r *http.Request) {
+	userId, err := handler.userService.GetLoggedInUser(r)
+	if userId == 0 || err != nil {
+		common.HandleUnauthorized(w, r)
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	var dto bean.AttributesDto
+	err = decoder.Decode(&dto)
+	if err != nil {
+		handler.logger.Errorw(""request err, AddAttributes"", ""err"", err, ""payload"", dto)
+		common.WriteJsonResp(w, err, nil, http.StatusBadRequest)
+		return
+	}
+
+	token := r.Header.Get(""token"")
+	if ok := handler.enforcer.Enforce(token, casbin.ResourceGlobal, casbin.ActionCreate, ""*""); !ok {
+		common.WriteJsonResp(w, errors.New(""unauthorized""), nil, http.StatusForbidden)
+		return
+	}
+
+	// Check if the key is internal-only (not allowed to be created via API)
+	if handler.isInternalOnlyKey(dto.Key) {
+		handler.logger.Warnw(""attempt to create internal-only attribute"", ""key"", dto.Key, ""userId"", userId)
+		common.WriteJsonResp(w, fmt.Errorf(""forbidden: cannot create attribute with key: %q"", dto.Key), nil, http.StatusForbidden)
+		return
+	}
+
+	handler.logger.Infow(""request payload, AddAttributes"", ""payload"", dto)
+	resp, err := handler.attributesService.AddAttributes(&dto)
+	if err != nil {
+		handler.logger.Errorw(""service err, AddAttributes"", ""err"", err, ""payload"", dto)
+		common.WriteJsonResp(w, err, nil, http.StatusInternalServerError)
+		return
+	}
+	common.WriteJsonResp(w, nil, resp, http.StatusOK)
+}"
+Authentication Bypass,"func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16, numNewPriorities, gap int) (uint16, uint16, error) {
+	target := numNewPriorities - gap
+	// To reach the target number of slots to be added into the gap, Priorities needs to be sifted upwards or
+	// downwards (or both), and empty slots from lower and higher ofPriority space will be swapped into the gap.
+	// costMap maintains the costs and reassign boundaries for each combination of lower empty slots used and
+	// higher empty slots used, with the sum equals the target. For example, if the target is 2, the maps stores
+	//  {0: cost of using 0 lower empty slots and 2 higher empty slots,
+	//   1: cost of using 1 lower empty slot and 1 higher empty slot each,
+	//   2: cost of using 2 lower empty slots and 0 higher empty slots}
+	costMap := map[int]*reassignCost{}
+	reassignBoundLow, reassignBoundHigh := lowerBound, upperBound
+	costSiftDown, costSiftUp, emptiedSlotsLow, emptiedSlotsHigh := 0, 0, 0, 0
+	for reassignBoundLow >= pa.policyBottomPriority && emptiedSlotsLow < target {
+		if _, exists := pa.ofPriorityMap[reassignBoundLow]; exists {
+			costSiftDown++
+		} else {
+			emptiedSlotsLow++
+			costMap[emptiedSlotsLow] = &reassignCost{reassignBoundLow, upperBound - 1, costSiftDown}
+		}
+		reassignBoundLow--
+	}
+	for reassignBoundHigh <= pa.policyTopPriority && emptiedSlotsHigh < target {
+		if _, exists := pa.ofPriorityMap[reassignBoundHigh]; exists {
+			costSiftUp++
+		} else {
+			emptiedSlotsHigh++
+			// visit costMap in the reverse direction
+			mapIndex := target - emptiedSlotsHigh
+			c, ok := costMap[mapIndex]
+			// only add to the costMap if the counterpart cost is available. i.e. if the target is 4, and cost for
+			// using 2 empty slots high is computed, it does not make sense to store this cost if there's no entry
+			// for cost that uses 2 empty slots low (indicating no 2 empty slots can be found starting from lowerBound).
+			if ok {
+				c.cost = costSiftDown + costSiftUp
+				c.upperBound = reassignBoundHigh
+			} else if mapIndex == 0 {
+				costMap[mapIndex] = &reassignCost{lowerBound + 1, reassignBoundHigh, costSiftUp}
+			}
+		}
+		reassignBoundHigh++
+	}
+	minCost, minCostIndex := math.MaxInt32, 0
+	for i := target; i >= 0; i-- {
+		if cost, exists := costMap[i]; exists && cost.cost < minCost {
+			// make sure that the reassign range adds up to the number of all Priorities to be registered.
+			if int(cost.upperBound-cost.lowerBound)+1 == numNewPriorities+cost.cost {
+				minCost = cost.cost
+				minCostIndex = i
+			}
+		}
+	}
+	if minCost == math.MaxInt32 {
+		// theoretically this should not happen since Priority overflow is checked earlier.
+		return lowerBound, upperBound, fmt.Errorf(""failed to push boundary priorities to reach numNewPriorities"")
+	}
+	return costMap[minCostIndex].lowerBound, costMap[minCostIndex].upperBound, nil
+}","func (pa *priorityAssigner) findReassignBoundaries(lowerBound, upperBound uint16, numNewPriorities, gap int) (uint16, uint16, error) {
+	target := numNewPriorities - gap
+	// To reach the target number of slots to be added into the gap, Priorities needs to be sifted upwards or
+	// downwards (or both), and empty slots from lower and higher ofPriority space will be swapped into the gap.
+	// costMap maintains the costs and reassign boundaries for each combination of lower empty slots used and
+	// higher empty slots used, with the sum equals the target. For example, if the target is 2, the maps stores
+	//  {0: cost of using 0 lower empty slots and 2 higher empty slots,
+	//   1: cost of using 1 lower empty slot and 1 higher empty slot each,
+	//   2: cost of using 2 lower empty slots and 0 higher empty slots}
+	costMap := map[int]*reassignCost{}
+	reassignBoundLow, reassignBoundHigh := lowerBound, upperBound
+	costSiftDown, costSiftUp, emptiedSlotsLow, emptiedSlotsHigh := 0, 0, 0, 0
+	// Search for empty slots below lowerBound, but don't go below policyBottomPriority
+	for reassignBoundLow >= pa.policyBottomPriority && emptiedSlotsLow < target {
+		if _, exists := pa.ofPriorityMap[reassignBoundLow]; exists {
+			costSiftDown++
+		} else {
+			emptiedSlotsLow++
+			// When upperBound == lowerBound, use upperBound directly to create a valid single-slot range
+			// When upperBound > lowerBound, use upperBound - 1 to avoid overlapping with the gap
+			upperBoundForCost := upperBound
+			if upperBound > lowerBound {
+				upperBoundForCost = upperBound - 1
+			}
+			// Special case: when we're at the boundary itself, include it in the range
+			if reassignBoundLow == lowerBound && upperBound == lowerBound {
+				upperBoundForCost = upperBound // Include the boundary slot
+			}
+			// Only create cost map entry if it results in a valid range
+			if reassignBoundLow <= upperBoundForCost {
+				costMap[emptiedSlotsLow] = &reassignCost{reassignBoundLow, upperBoundForCost, costSiftDown}
+			}
+		}
+		reassignBoundLow--
+	}
+	for reassignBoundHigh <= pa.policyTopPriority && emptiedSlotsHigh < target {
+		if _, exists := pa.ofPriorityMap[reassignBoundHigh]; exists {
+			costSiftUp++
+		} else {
+			emptiedSlotsHigh++
+			// visit costMap in the reverse direction
+			mapIndex := target - emptiedSlotsHigh
+			c, ok := costMap[mapIndex]
+			// only add to the costMap if the counterpart cost is available. i.e. if the target is 4, and cost for
+			// using 2 empty slots high is computed, it does not make sense to store this cost if there's no entry
+			// for cost that uses 2 empty slots low (indicating no 2 empty slots can be found starting from lowerBound).
+			if ok {
+				c.cost = costSiftDown + costSiftUp
+				c.upperBound = reassignBoundHigh
+			} else if mapIndex == 0 {
+				// When upperBound == lowerBound, start from lowerBound itself, not lowerBound + 1
+				startBound := lowerBound + 1
+				if upperBound == lowerBound {
+					startBound = lowerBound // Include the boundary slot in the reassignment range
+				}
+				costMap[mapIndex] = &reassignCost{startBound, reassignBoundHigh, costSiftUp}
+			}
+		}
+		reassignBoundHigh++
+	}
+	minCost, minCostIndex := math.MaxInt32, 0
+	for i := target; i >= 0; i-- {
+		if cost, exists := costMap[i]; exists && cost.cost < minCost {
+			// make sure that the reassign range adds up to the number of all Priorities to be registered.
+			rangeSize := int(cost.upperBound-cost.lowerBound) + 1
+			requiredSize := numNewPriorities + cost.cost
+			if rangeSize == requiredSize {
+				minCost = cost.cost
+				minCostIndex = i
+			}
+		}
+	}
+	if minCost == math.MaxInt32 {
+		// theoretically this should not happen since Priority overflow is checked earlier.
+		return lowerBound, upperBound, fmt.Errorf(""failed to push boundary priorities to reach numNewPriorities"")
+	}
+	return costMap[minCostIndex].lowerBound, costMap[minCostIndex].upperBound, nil
+}"
+Authentication Bypass,"func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound uint16, prioritiesToRegister types.ByPriority,
+	updates map[types.Priority]*priorityUpdate) error {
+	numNewPriorities, gap := len(prioritiesToRegister), int(upperBound-lowerBound-1)
+	low, high, err := pa.findReassignBoundaries(lowerBound, upperBound, numNewPriorities, gap)
+	if err != nil {
+		return err
+	}
+	// siftedPrioritiesLow and siftedPrioritiesHigh keep track of Priorities that need to be reassigned,
+	// below the lowerBound and above the upperBound respectively.
+	var siftedPrioritiesLow, siftedPrioritiesHigh types.ByPriority
+	for i := low; i <= lowerBound; i++ {
+		if p, exists := pa.ofPriorityMap[i]; exists {
+			siftedPrioritiesLow = append(siftedPrioritiesLow, p)
+		}
+	}
+	for i := upperBound; i <= high; i++ {
+		if p, exists := pa.ofPriorityMap[i]; exists {
+			siftedPrioritiesHigh = append(siftedPrioritiesHigh, p)
+		}
+	}
+	allPriorities := append(siftedPrioritiesLow, prioritiesToRegister...)
+	allPriorities = append(allPriorities, siftedPrioritiesHigh...)
+	reassignedPriorities := append(siftedPrioritiesLow, siftedPrioritiesHigh...)
+	// record the ofPriorities of the reassigned Priorities before the reassignment.
+	for _, p := range reassignedPriorities {
+		// if exists (the Priority has already been reassigned in a previous step), the original
+		// ofPriority of that Priority would have been recorded.
+		if _, exists := updates[p]; !exists {
+			updates[p] = &priorityUpdate{Original: pa.priorityMap[p]}
+		}
+	}
+	// assign ofPriorities by the order of siftedPrioritiesLow, prioritiesToRegister and siftedPrioritiesHigh.
+	for i, p := range allPriorities {
+		pa.updatePriorityAssignment(low+uint16(i), p)
+	}
+	// record the ofPriorities of the reassigned Priorities after the reassignment.
+	for _, p := range reassignedPriorities {
+		updates[p].Updated = pa.priorityMap[p]
+	}
+	return nil
+}","func (pa *priorityAssigner) reassignBoundaryPriorities(lowerBound, upperBound uint16, prioritiesToRegister types.ByPriority,
+	updates map[types.Priority]*priorityUpdate) error {
+	numNewPriorities := len(prioritiesToRegister)
+	gapUint16, hasSpace := findGap(upperBound, lowerBound)
+	var gap int
+	if hasSpace {
+		gap = int(gapUint16)
+	} else {
+		gap = 0 // No available slots when upperBound <= lowerBound
+	}
+	low, high, err := pa.findReassignBoundaries(lowerBound, upperBound, numNewPriorities, gap)
+	if err != nil {
+		return err
+	}
+	// siftedPrioritiesLow and siftedPrioritiesHigh keep track of Priorities that need to be reassigned,
+	// below the lowerBound and above the upperBound respectively. Note that we do not include the priority
+	// currently assigned to policyBottomPriority since it cannot be sifted down further, and vice versa
+	// for policyTopPriority.
+	var siftedPrioritiesLow, siftedPrioritiesHigh types.ByPriority
+	for i := low; i <= lowerBound && i != pa.policyBottomPriority; i++ {
+		if p, exists := pa.ofPriorityMap[i]; exists {
+			siftedPrioritiesLow = append(siftedPrioritiesLow, p)
+		}
+	}
+	for i := upperBound; i <= high && i != pa.policyTopPriority; i++ {
+		if p, exists := pa.ofPriorityMap[i]; exists {
+			siftedPrioritiesHigh = append(siftedPrioritiesHigh, p)
+		}
+	}
+	allPriorities := append(siftedPrioritiesLow, prioritiesToRegister...)
+	allPriorities = append(allPriorities, siftedPrioritiesHigh...)
+	reassignedPriorities := append(siftedPrioritiesLow, siftedPrioritiesHigh...)
+	// record the ofPriorities of the reassigned Priorities before the reassignment.
+	for _, p := range reassignedPriorities {
+		// if exists (the Priority has already been reassigned in a previous step), the original
+		// ofPriority of that Priority would have been recorded.
+		if _, exists := updates[p]; !exists {
+			updates[p] = &priorityUpdate{Original: pa.priorityMap[p]}
+		}
+	}
+	// assign ofPriorities by the order of siftedPrioritiesLow, prioritiesToRegister and siftedPrioritiesHigh.
+	for i, p := range allPriorities {
+		// Protect against overflow when low + i > 65535
+		ofPriority := uint64(low) + uint64(i)
+		if ofPriority > math.MaxUint16 {
+			return fmt.Errorf(""priority assignment overflow: low=%d + i=%d exceeds uint16 range"", low, i)
+		}
+		pa.updatePriorityAssignment(uint16(ofPriority), p)
+	}
+	// record the ofPriorities of the reassigned Priorities after the reassignment.
+	for _, p := range reassignedPriorities {
+		updates[p].Updated = pa.priorityMap[p]
+	}
+	return nil
+}"
