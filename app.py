@@ -1,12 +1,30 @@
 from __future__ import annotations
 
 import streamlit as st
+from streamlit.web import cli as stcli
+import sys
 
 from autosecdev.agents.patch_agent import PatchAgent
 from autosecdev.agents.report_agent import ReportAgent
 from autosecdev.agents.sast_agent import SASTAgent
+from autosecdev.schemas import PatchReport
 from autosecdev.settings import settings
 
+# WSGI application for deployment
+def application(environ, start_response):
+    """WSGI application wrapper for Streamlit"""
+    # This is a placeholder for WSGI servers
+    # Streamlit apps are typically run with: streamlit run app.py
+    status = '200 OK'
+    response_headers = [('Content-type', 'text/plain')]
+    start_response(status, response_headers)
+    return [b'AutoSecDev Streamlit App - Run with: streamlit run app.py']
+
+# Alias for different deployment platforms
+app = application
+handler = application
+
+# Main Streamlit app
 st.set_page_config(page_title="AutoSecDev Demo", layout="wide")
 st.title("AutoSecDev - Multi-Agent DevSecOps Security Pipeline (Demo)")
 
