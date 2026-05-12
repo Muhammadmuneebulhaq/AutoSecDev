@@ -1,0 +1,5 @@
+outs:
+- md5: 33ca2e17b08d32f07826764fda20c30b
+  size: 25836
+  hash: md5
+  path: python_vulns_only.csv
