@@ -1,0 +1,50 @@
+# Large model and data directories
+Models/
+data/
+CVEfixes_v1.0.0/
+Fresh/
+notebooks/
+TestingDatasets/
+outputs/
+papers/
+
+# Test files
+test_*.py
+debug_*.py
+
+# Documentation
+*.md
+FIXES_APPLIED.md
+DEPLOYMENT_GUIDE.md
+LOCAL_MODELS_QUICKSTART.md
+STATUS.md
+TROUBLESHOOTING.md
+
+# Data files
+*.json
+*.csv
+datasetURLs.txt
+_prd_text.txt
+diversevul_20230702.json
+
+# Git and version control
+.git/
+.gitignore
+.github/
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# Environment files
+.env
+.env.local

@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import os
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request
+
+logger = logging.getLogger(__name__)
 
 from autosecdev.agents.patch_agent import PatchAgent
 from autosecdev.agents.report_agent import ReportAgent
 from autosecdev.agents.sast_agent import SASTAgent
 from autosecdev.github.github_client import GithubClient
 from autosecdev.settings import settings
-
+from dotenv import load_dotenv
+load_dotenv()
 
 app = FastAPI(title="AutoSecDev")
 
@@ -35,11 +39,19 @@ def run_pipeline(files: Dict[str, str]) -> Dict[str, Any]:
 
 @app.post("/webhook/github", tags=["github"])
 async def github_webhook(request: Request) -> Dict[str, Any]:
-    payload = await request.json()
+    try:
+        payload = await request.json()
+    except Exception as e:
+        logger.error(f"JSON parsing error: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Invalid or empty JSON body: {str(e)}")
+
+    if not payload:
+        raise HTTPException(status_code=400, detail="Request body cannot be empty")
 
     repo = (payload.get("repository") or {}).get("full_name")
     pr = (payload.get("pull_request") or {}).get("number")
     if not repo or not pr:
+        logger.error(f"Missing repo or PR: repo={repo}, pr={pr}")
         raise HTTPException(status_code=400, detail="Missing repository.full_name or pull_request.number")
 
     token = os.getenv("GITHUB_TOKEN")
@@ -48,7 +60,11 @@ async def github_webhook(request: Request) -> Dict[str, Any]:
 
     github = GithubClient(token=token)
 
-    changed_files = github.list_pr_files(repo, int(pr))
+    try:
+        changed_files = github.list_pr_files(repo, int(pr))
+    except Exception as e:
+        logger.error(f"Failed to fetch PR files for {repo}#{pr}: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Failed to fetch PR files: {str(e)}")
     py_files = [f for f in changed_files if str(f.get("filename") or "").endswith(".py")]
     if not py_files:
         return {"ok": True, "message": "No Python files changed; nothing to scan."}
